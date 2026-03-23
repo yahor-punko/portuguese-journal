@@ -1049,11 +1049,25 @@ function buildPrompt(topic) {
   const recentExs = (topic.exercises || []).slice(-5);
   const recentPerf = recentExs.length ? `Recent sessions: ${recentExs.map(e => e.error_count + ' errors').join(', ')}` : '';
   const sessionSeed = Date.now();
+  const randomSeed = Math.floor(Math.random() * 10000);
+  
+  // Get last generated exercises from localStorage to avoid repetition
+  const historyKey = `exercise_history_${currentTopicId}`;
+  const history = JSON.parse(localStorage.getItem(historyKey) || '[]');
+  const lastExercises = history.slice(-10).map(ex => ex.question).join('; ');
 
   let prompt = globalPrompt + '\n\n';
   prompt += `TOPIC: ${topic.unit ? topic.unit + ' — ' : ''}${topic.name}\n\n`;
   if (topic.custom_prompt) prompt += `TOPIC INSTRUCTIONS:\n${topic.custom_prompt}\n\n`;
   if (vocab) prompt += `KNOWN VOCABULARY (use these words in exercises):\n${vocab}\n\n`;
+  
+  // Show recent exercises to AVOID repetition
+  if (lastExercises) {
+    prompt += `RECENTLY USED EXERCISES (DO NOT REPEAT THESE):
+${lastExercises}
+
+`;
+  }
   
   // CRITICAL: If there are errors, 2-3 exercises MUST focus on them
   if (openErrors.length > 0) {
@@ -1069,7 +1083,20 @@ function buildPrompt(topic) {
   }
   
   if (recentPerf) prompt += `${recentPerf}\n\n`;
-  prompt += `SESSION ID: ${sessionSeed} — generate completely fresh exercises, different from any previous session.\n`;
+  
+  prompt += `UNIQUENESS REQUIREMENT:
+- SESSION ID: ${sessionSeed}
+- RANDOM SEED: ${randomSeed}
+- You MUST generate completely NEW exercises different from the "RECENTLY USED" list above
+- Use DIFFERENT sentence subjects (vary between: eu, tu, ele, ela, nós, vocês, eles, elas)
+- Use DIFFERENT contexts and scenarios (family, work, hobbies, travel, daily life, etc.)
+- Use DIFFERENT vocabulary (vary nouns, adjectives, places, actions, time expressions)
+- Use DIFFERENT sentence structures and patterns
+- NEVER repeat the same question type or format twice in a row
+- Maximum variety and creativity required
+
+`;
+  
   prompt += 'All text in English only. Return ONLY valid JSON.';
   return prompt;
 }
@@ -1338,12 +1365,23 @@ async function generateExercise() {
     const res = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-      body: JSON.stringify({ model: 'gpt-4o', temperature: 0.7, messages: [{ role: 'user', content: buildPrompt(topic) }] })
+      body: JSON.stringify({ model: 'gpt-4o', temperature: 1.0, messages: [{ role: 'user', content: buildPrompt(topic) }] })
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error?.message || `HTTP ${res.status}`);
     const raw = data.choices[0].message.content.trim().replace(/^```json\s*/,'').replace(/```\s*$/,'').trim();
     currentExercise = JSON.parse(raw);
+    
+    // Save to exercise history to avoid repetition
+    if (currentExercise && currentExercise.items) {
+      const historyKey = `exercise_history_${currentTopicId}`;
+      const history = JSON.parse(localStorage.getItem(historyKey) || '[]');
+      history.push(...currentExercise.items);
+      // Keep only last 30 exercises
+      if (history.length > 30) history.splice(0, history.length - 30);
+      localStorage.setItem(historyKey, JSON.stringify(history));
+    }
+    
     renderExercise();
     status.textContent = '';
   } catch(e) {
