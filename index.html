@@ -746,10 +746,18 @@ function getTopic(id) { return topics.find(t => t.id === id); }
 function computeProgress(t) {
   const exs = t.exercises || [];
   if (!exs.length) return 0;
-  const last = exs[exs.length - 1];
-  if (last.error_count === 0) return 100;
-  const perfect = exs.filter(e => e.error_count === 0).length;
-  return Math.min(99, Math.round((perfect / exs.length) * 90 + 10));
+  
+  // Оцениваем каждое упражнение по шкале:
+  // 0 ошибок = 100%, 1 ошибка = 85%, 2 = 70%, 3+ = 50%
+  let totalScore = 0;
+  exs.forEach(ex => {
+    if (ex.error_count === 0) totalScore += 100;
+    else if (ex.error_count === 1) totalScore += 85;
+    else if (ex.error_count === 2) totalScore += 70;
+    else totalScore += 50;
+  });
+  
+  return Math.round(totalScore / exs.length);
 }
 
 // ══════════════════════════════════════════════════════
