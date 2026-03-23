@@ -1386,7 +1386,12 @@ async function submitExercise() {
   if (!apiKey) { toast('No API key — go to Settings'); return; }
   const items = currentExercise.items || [];
   const answers = items.map((item, i) => ({ question: item.question, expected: item.answer, given: (currentAnswers[i]||'').trim() }));
+  
+  // Disable inputs and button during grading
   items.forEach((_, i) => { const inp = document.getElementById('ex-inp-'+i); if (inp) inp.disabled = true; });
+  const checkBtn = document.querySelector('.exercise-box ~ .btn-row .btn');
+  if (checkBtn) checkBtn.disabled = true;
+  
   const status = document.getElementById('gen-status');
   status.textContent = 'Grading'; status.classList.add('loading');
 
@@ -1528,8 +1533,19 @@ async function processGrading(results, answers) {
     banner.innerHTML = `${results.length-errorCount}/${results.length} correct · ${errorCount} error${errorCount>1?'s':''} saved. Practice again to improve.`;
   }
 
-  const btnRow = document.querySelector('#exercise-area .btn-row');
-  if (btnRow) btnRow.innerHTML += `<button class="btn btn-ghost" onclick="generateExercise()">New exercise →</button>`;
+  // Add "New exercise" button after the existing button
+  const btnRow = document.querySelector('.btn-row');
+  if (btnRow) {
+    // Check if "New exercise" button already exists
+    const existingNewBtn = btnRow.querySelector('.btn-ghost');
+    if (!existingNewBtn) {
+      const newBtn = document.createElement('button');
+      newBtn.className = 'btn btn-ghost';
+      newBtn.textContent = 'New exercise →';
+      newBtn.onclick = generateExercise;
+      btnRow.appendChild(newBtn);
+    }
+  }
 
   renderTopicDetail();
   renderSidebarTopics();
