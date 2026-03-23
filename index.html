@@ -1504,8 +1504,10 @@ function renderExercise() {
     if (item.type === 'choice' && item.options) {
       html += `<div style="display:flex;flex-direction:column;gap:4px;margin-top:6px;">`;
       item.options.forEach(opt => {
+        // Extract letter from option (e.g., "a) text" -> "a")
+        const optionLetter = opt.trim().match(/^([a-z])\)/)?.[1] || opt;
         html += `<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:14px;">
-          <input type="radio" name="choice-${i}" value="${opt}" onchange="currentAnswers[${i}]=this.value" style="accent-color:var(--ink);">
+          <input type="radio" name="choice-${i}" value="${optionLetter}" onchange="currentAnswers[${i}]=this.value" style="accent-color:var(--ink);">
           ${opt}</label>`;
       });
       html += `</div>`;
