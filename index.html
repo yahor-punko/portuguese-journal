@@ -1618,18 +1618,8 @@ ${JSON.stringify(normalizedAnswers, null, 2)}`;
 }
 
 async function processGrading(results, answers) {
-  console.log('=== processGrading START ===');
-  console.log('Results:', results);
-  console.log('Answers:', answers);
-  
   const topic = getTopic(currentTopicId);
-  if (!topic) {
-    console.error('Topic not found!');
-    return;
-  }
-  
-  console.log('Topic:', topic);
-  
+  if (!topic) return;
   let errorCount = 0;
   const newErrors = [], newVocab = [];
 
@@ -1666,33 +1656,18 @@ async function processGrading(results, answers) {
     }
   });
 
-  console.log('=== After processing results ===');
-  console.log('Error count:', errorCount);
-  console.log('New errors:', newErrors.length);
-  console.log('New vocab:', newVocab.length);
-
   // Save to Supabase (wrapped in try-catch to ensure UI updates always happen)
   try {
-    console.log('=== Saving to database ===');
-    console.log('Attempting to save exercise...');
-    
     const { data: exData, error: exError } = await sb.from('exercises').insert({ topic_id: currentTopicId, user_id: currentUser.id, error_count: errorCount }).select().single();
-    
-    console.log('Exercise save completed');
     
     if (exError) {
       console.error('Error saving exercise:', exError);
     } else if (exData) {
       topic.exercises.push(exData);
-      console.log('Exercise saved:', exData);
-      console.log('Total exercises now:', topic.exercises.length);
-      console.log('Error count:', errorCount);
     }
 
     if (newErrors.length) {
-      console.log('Attempting to save errors...');
       const { data: errData, error: errError } = await sb.from('errors').insert(newErrors).select();
-      console.log('Errors save completed');
       
       if (errError) {
         console.error('Error saving errors:', errError);
@@ -1702,9 +1677,7 @@ async function processGrading(results, answers) {
     }
     
     if (newVocab.length) {
-      console.log('Attempting to save vocab...');
       const { data: vocData, error: vocError } = await sb.from('vocab').upsert(newVocab, { onConflict: 'topic_id,pt', ignoreDuplicates: true }).select();
-      console.log('Vocab save completed');
       
       if (vocError) {
         console.error('Error saving vocab:', vocError);
@@ -1712,20 +1685,13 @@ async function processGrading(results, answers) {
         vocData.forEach(v => { if (!topic.vocab.find(x => x.id === v.id)) topic.vocab.push(v); });
       }
     }
-    
-    console.log('=== Database operations complete ===');
   } catch (dbError) {
     console.error('Database operation failed:', dbError);
     // Continue to show results even if DB fails
   }
 
-  console.log('=== Showing result banner ===');
-  
   const banner = document.getElementById('result-banner');
-  console.log('Banner element:', banner);
-  
   const pct = computeProgress(topic);
-  console.log('Computed progress:', pct + '%');
   
   if (errorCount === 0) {
     banner.className = 'result-banner pass';
@@ -1736,41 +1702,17 @@ async function processGrading(results, answers) {
   }
 
   // Replace "Check answers" button with "New exercise" button
-  let btnRow = document.querySelector('.btn-row');
-  
-  // Fallback: if btn-row not found, try finding it inside exercise-area
-  if (!btnRow) {
-    btnRow = document.querySelector('#exercise-area .btn-row');
-  }
-  
-  console.log('=== Button replacement debug ===');
-  console.log('btnRow found:', !!btnRow);
+  const btnRow = document.querySelector('#exercise-area .btn-row');
   
   if (btnRow) {
-    // Find the Check answers button
     const checkBtn = btnRow.querySelector('.btn:not(.btn-ghost)');
-    console.log('checkBtn found:', !!checkBtn);
-    console.log('checkBtn before:', checkBtn ? {
-      text: checkBtn.textContent,
-      disabled: checkBtn.disabled,
-      className: checkBtn.className
-    } : null);
     
     if (checkBtn) {
-      // Replace with New exercise button
       checkBtn.textContent = 'New exercise →';
       checkBtn.className = 'btn btn-ghost';
       checkBtn.onclick = generateExercise;
-      checkBtn.disabled = false; // Enable AFTER changing text and handler
-      
-      console.log('checkBtn after:', {
-        text: checkBtn.textContent,
-        disabled: checkBtn.disabled,
-        className: checkBtn.className
-      });
+      checkBtn.disabled = false;
     }
-  } else {
-    console.error('btn-row not found after grading');
   }
 
   renderTopicDetail();
