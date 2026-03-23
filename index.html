@@ -279,7 +279,7 @@ main{padding:2.5rem 3rem;max-width:760px;}
     <div id="tab-vocab" class="tab-panel">
       <div style="display:flex;gap:10px;align-items:flex-end;margin-bottom:1.25rem;">
         <div class="field" style="flex:1;margin:0;"><label>Portuguese</label><input type="text" id="vadd-pt" placeholder="obrigado"></div>
-        <div class="field" style="flex:1;margin:0;"><label>Translation</label><input type="text" id="vadd-ru" placeholder="thank you"></div>
+        <div class="field" style="flex:1;margin:0;"><label>English translation</label><input type="text" id="vadd-ru" placeholder="thank you"></div>
         <button class="btn btn-sm" onclick="addVocab()">Add</button>
       </div>
       <div id="vocab-list"></div>
@@ -399,8 +399,8 @@ main{padding:2.5rem 3rem;max-width:760px;}
 // ══════════════════════════════════════════════════════
 // CONFIG — replace with your Supabase project values
 // ══════════════════════════════════════════════════════
-const SUPABASE_URL = 'https://jmmyuhegnzghhtvyswbq.supabase.co';
-const SUPABASE_ANON_KEY = 'sb_publishable_n57q1fkUrOsaEDtG2PsfTw_-dMwYdaO';
+const SUPABASE_URL = 'https://YOUR_PROJECT.supabase.co';
+const SUPABASE_ANON_KEY = 'YOUR_ANON_KEY';
 
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -415,19 +415,21 @@ let currentExercise = null;
 let currentAnswers = {};
 let graded = false;
 
-const DEFAULT_PROMPT = `You are a European Portuguese (Portugal) language exercise generator for a Russian-speaking learner at level A1/A2.
+const DEFAULT_PROMPT = `You are a European Portuguese (Portugal) language exercise generator for an English-speaking learner at level A1/A2.
 
 RULES:
-- Always use European Portuguese (autocarro not ônibus, casa de banho not banheiro, etc.)
+- Always use European Portuguese, never Brazilian (autocarro not ônibus, casa de banho not banheiro, frigorífico not geladeira, etc.)
+- ALWAYS generate NEW, UNIQUE exercises — never repeat questions from previous sessions. Vary sentence subjects, contexts and vocabulary every time.
 - Generate 5–7 exercises per session
-- Mix exercise types: fill-in-the-blank, transformation, translation from Russian, multiple choice, error correction
+- Mix exercise types: fill-in-the-blank, sentence transformation, translation from English, multiple choice, error correction
+- ALL text (instructions, questions, explanations) must be in English only — no other languages
 - Return ONLY valid JSON, no markdown, no preamble
-- Each item must have: "question", "answer", "type" (fill|transform|translate|choice|correct)
+- Each item must have: "question" (English), "answer" (correct Portuguese), "type" (fill|transform|translate|choice|correct), "grammar_category" (e.g. "Verb SER", "Articles", "Adjective agreement")
 - For "choice" type add "options": ["a","b","c","d"]
-- "instructions" field: one sentence describing the exercise batch
+- "instructions" field: one sentence in English
 
 JSON format:
-{"instructions":"...","items":[{"type":"fill","question":"Eu ___ estudante.","answer":"sou"}]}`;
+{"instructions":"...","items":[{"type":"fill","question":"Fill in: Eu ___ estudante. (to be)","answer":"sou","grammar_category":"Verb SER"},{"type":"translate","question":"She is a teacher.","answer":"Ela é professora.","grammar_category":"Verb SER"}]}`;
 
 // ══════════════════════════════════════════════════════
 // INIT
@@ -589,6 +591,11 @@ function showTopicDetail(topicId) {
   renderTopicDetail();
   switchTab('exercises', document.querySelector('.tab-btn'));
   renderSidebarTopics();
+  // Auto-explain topic on first visit or when no exercises yet
+  const t = getTopic(topicId);
+  if (t && t.exercises.length === 0) {
+    explainThenGenerate();
+  }
 }
 
 function switchTab(name, btn) {
@@ -750,7 +757,8 @@ async function addVocab() {
   const t = getTopic(currentTopicId);
   if (!t) return;
   if (t.vocab.find(v => v.pt === pt)) { toast('Word already exists'); return; }
-  const { data, error } = await sb.from('vocab').insert({ topic_id: currentTopicId, user_id: currentUser.id, pt, ru }).select().single();
+  const ru = document.getElementById('vadd-ru').value.trim();
+  const { data, error } = await sb.from('vocab').insert({ topic_id: currentTopicId, user_id: currentUser.id, pt, en: ru, ru }).select().single();
   if (error) { toast('Error: ' + error.message); return; }
   t.vocab.push(data);
   document.getElementById('vadd-pt').value = '';
@@ -774,7 +782,7 @@ function renderVocab() {
   el.innerHTML = t.vocab.map(v => `
     <div class="vocab-row">
       <span class="vocab-pt">${v.pt}</span>
-      <span class="vocab-ru">${v.ru||'—'}</span>
+      <span class="vocab-ru">${v.en||v.ru||'—'}</span>
       <span class="vocab-when">${v.added_at||''}</span>
       <button class="btn btn-ghost btn-sm" style="font-size:10px;padding:2px 8px;" onclick="removeVocab(${v.id})">×</button>
     </div>`).join('');
@@ -796,16 +804,38 @@ function renderErrors() {
   const t = getTopic(currentTopicId);
   const el = document.getElementById('errors-list');
   if (!t || !t.errors.length) { el.innerHTML = '<div class="empty">No errors recorded yet. Keep practicing!</div>'; return; }
-  const sorted = [...t.errors.filter(e=>!e.fixed), ...t.errors.filter(e=>e.fixed)];
-  el.innerHTML = sorted.map(e => `
-    <div class="error-row">
-      <div class="check-box${e.fixed?' done':''}" onclick="toggleErrorFixed(${e.id},${e.fixed})"></div>
-      <div>
-        <div class="error-text${e.fixed?' done':''}">${e.text}</div>
-        ${e.explanation ? `<div class="error-explanation">${e.explanation}</div>` : ''}
-        <div class="error-meta">${e.created_at?.slice(0,10)||''} · ${e.exercise_meta||''}</div>
-      </div>
-    </div>`).join('');
+
+  // Group by grammar_category
+  const groups = {};
+  t.errors.forEach(e => {
+    const cat = e.grammar_category || e.exercise_meta || 'General';
+    if (!groups[cat]) groups[cat] = [];
+    groups[cat].push(e);
+  });
+
+  // Open errors first, then fixed
+  const sortGroup = arr => [...arr.filter(e=>!e.fixed), ...arr.filter(e=>e.fixed)];
+
+  let html = '';
+  Object.entries(groups).forEach(([cat, errs]) => {
+    const openCount = errs.filter(e=>!e.fixed).length;
+    html += `<div style="margin-bottom:1.5rem;">
+      <div style="font-family:'Geist Mono',monospace;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink3);padding:.5rem 0;border-bottom:1px solid var(--line);margin-bottom:.5rem;display:flex;justify-content:space-between;">
+        <span>${cat}</span>
+        ${openCount ? `<span style="color:var(--red)">${openCount} open</span>` : '<span style="color:var(--green)">all fixed</span>'}
+      </div>`;
+    html += sortGroup(errs).map(e => `
+      <div class="error-row">
+        <div class="check-box${e.fixed?' done':''}" onclick="toggleErrorFixed(${e.id},${e.fixed})"></div>
+        <div>
+          <div class="error-text${e.fixed?' done':''}">${e.text}</div>
+          ${e.explanation ? `<div class="error-explanation">${e.explanation}</div>` : ''}
+          <div class="error-meta">${e.created_at?.slice(0,10)||''}</div>
+        </div>
+      </div>`).join('');
+    html += '</div>';
+  });
+  el.innerHTML = html;
 }
 
 // ══════════════════════════════════════════════════════
@@ -854,19 +884,62 @@ async function saveGlobalPrompt() {
 // ══════════════════════════════════════════════════════
 function buildPrompt(topic) {
   const globalPrompt = document.getElementById('global-prompt-input').value || DEFAULT_PROMPT;
-  const vocab = (topic.vocab || []).map(v => `${v.pt} = ${v.ru}`).join(', ');
+  const vocab = (topic.vocab || []).map(v => `${v.pt} = ${v.en||v.ru||''}`).join(', ');
   const openErrors = (topic.errors || []).filter(e => !e.fixed).map(e => e.text).join('; ');
-  const recentExs = (topic.exercises || []).slice(-3);
-  const recentPerf = recentExs.length ? `Recent: ${recentExs.map(e => e.error_count + ' errors').join(', ')}` : '';
+  const recentExs = (topic.exercises || []).slice(-5);
+  const recentPerf = recentExs.length ? `Recent sessions: ${recentExs.map(e => e.error_count + ' errors').join(', ')}` : '';
+  const sessionSeed = Date.now(); // forces uniqueness each generation
 
   let prompt = globalPrompt + '\n\n';
   prompt += `TOPIC: ${topic.unit ? topic.unit + ' — ' : ''}${topic.name}\n\n`;
   if (topic.custom_prompt) prompt += `TOPIC INSTRUCTIONS:\n${topic.custom_prompt}\n\n`;
-  if (vocab) prompt += `VOCABULARY (use in exercises):\n${vocab}\n\n`;
-  if (openErrors) prompt += `STUDENT ERRORS TO TARGET (design at least 2 exercises addressing these):\n${openErrors}\n\n`;
+  if (vocab) prompt += `KNOWN VOCABULARY (use these words in exercises):\n${vocab}\n\n`;
+  if (openErrors) prompt += `STUDENT ERRORS TO REINFORCE (at least 2 exercises must address these directly):\n${openErrors}\n\n`;
   if (recentPerf) prompt += `${recentPerf}\n\n`;
-  prompt += 'Return ONLY valid JSON.';
+  prompt += `SESSION ID: ${sessionSeed} — generate completely fresh exercises, different from any previous session.\n`;
+  prompt += 'All text in English only. Return ONLY valid JSON.';
   return prompt;
+}
+
+async function explainThenGenerate() {
+  const apiKey = localStorage.getItem('pt_openai_key');
+  if (!apiKey) return;
+  const topic = getTopic(currentTopicId);
+  if (!topic) return;
+  const area = document.getElementById('exercise-area');
+  const status = document.getElementById('gen-status');
+  status.textContent = 'Loading topic explanation'; status.classList.add('loading');
+
+  const explainPrompt = `You are a European Portuguese (Portugal) language tutor. The student is starting a new topic.
+Topic: ${topic.unit ? topic.unit + ' — ' : ''}${topic.name}
+${topic.custom_prompt ? 'Focus: ' + topic.custom_prompt : ''}
+
+Write a concise topic explanation in English (max 150 words) covering:
+1. What grammar or vocabulary this topic covers
+2. The key rule(s) in plain English
+3. 2-3 short example sentences in Portuguese with English translation
+
+Format as plain text, no markdown headers, no bullet symbols. Just clear paragraphs.`;
+
+  try {
+    const res = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+      body: JSON.stringify({ model: 'gpt-4.1-mini', temperature: 0.5, messages: [{ role: 'user', content: explainPrompt }] })
+    });
+    const data = await res.json();
+    if (res.ok) {
+      const explanation = data.choices[0].message.content.trim();
+      area.innerHTML = `<div style="border:1px solid var(--line);padding:1.25rem 1.5rem;background:var(--white);margin-bottom:1.25rem;">
+        <div style="font-family:'Geist Mono',monospace;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink3);margin-bottom:.75rem;">Topic overview</div>
+        <div style="font-size:15px;color:var(--ink2);line-height:1.75;white-space:pre-line;">${explanation}</div>
+      </div>`;
+    }
+  } catch(e) { /* silent fail — just skip explanation */ }
+
+  status.classList.remove('loading');
+  status.textContent = '';
+  await generateExercise();
 }
 
 async function generateExercise() {
@@ -885,7 +958,7 @@ async function generateExercise() {
     const res = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-      body: JSON.stringify({ model: 'gpt-4o', temperature: 0.7, messages: [{ role: 'user', content: buildPrompt(topic) }] })
+      body: JSON.stringify({ model: 'gpt-4.1-mini', temperature: 0.7, messages: [{ role: 'user', content: buildPrompt(topic) }] })
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error?.message || `HTTP ${res.status}`);
@@ -942,10 +1015,11 @@ async function submitExercise() {
   const status = document.getElementById('gen-status');
   status.textContent = 'Grading'; status.classList.add('loading');
 
-  const gradingPrompt = `You are grading a European Portuguese language exercise.
-For each item: determine if correct (accept minor spelling variations, but flag missing accents like é vs e).
-For each WRONG answer: write a short explanation in English (1-2 sentences) of the grammar rule violated.
-Return ONLY valid JSON: {"results":[{"correct":true/false,"explanation":"..."}]}
+  const gradingPrompt = `You are grading a European Portuguese language exercise for an English-speaking learner.
+For each item: determine if the student answer is correct. Accept minor spelling variations but flag missing accents (é vs e, ã vs a, etc.) as errors.
+For each WRONG answer provide: a short explanation in English (1-2 sentences) of the grammar rule, and the grammar_category (e.g. "Verb SER", "Articles", "Adjective agreement").
+Return ONLY valid JSON, no markdown:
+{"results":[{"correct":true,"explanation":null,"grammar_category":null}]}
 Items: ${JSON.stringify(answers, null, 2)}`;
 
   let results;
@@ -953,7 +1027,7 @@ Items: ${JSON.stringify(answers, null, 2)}`;
     const res = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-      body: JSON.stringify({ model: 'gpt-4o', temperature: 0, messages: [{ role: 'user', content: gradingPrompt }] })
+      body: JSON.stringify({ model: 'gpt-4.1-mini', temperature: 0, messages: [{ role: 'user', content: gradingPrompt }] })
     });
     const data = await res.json();
     const raw = data.choices[0].message.content.trim().replace(/^```json\s*/,'').replace(/```\s*$/,'').trim();
@@ -990,11 +1064,11 @@ async function processGrading(results, answers) {
       if (fb) fb.innerHTML = `<span class="ex-feedback err">✗ ${given}</span>
         <div class="ex-correct">→ ${correct}</div>
         ${r.explanation ? `<div class="ex-explanation">${r.explanation}</div>` : ''}`;
-      newErrors.push({ topic_id: currentTopicId, user_id: currentUser.id, text: `${given} → should be: ${correct} (Q: ${item.question})`, explanation: r.explanation||'', exercise_meta: topic.name });
+      newErrors.push({ topic_id: currentTopicId, user_id: currentUser.id, text: `${given} → should be: ${correct} (Q: ${item.question})`, explanation: r.explanation||'', grammar_category: r.grammar_category || item.grammar_category || 'General', exercise_meta: topic.name });
     }
     if (item.answer && item.answer.length < 60) {
       item.answer.split(/[\s,]+/).filter(w => /[a-záàâãéêíóôõúç]/i.test(w) && w.length > 2)
-        .forEach(w => { if (!topic.vocab.find(v => v.pt === w.toLowerCase())) newVocab.push({ topic_id: currentTopicId, user_id: currentUser.id, pt: w.toLowerCase(), ru: '' }); });
+        .forEach(w => { if (!topic.vocab.find(v => v.pt === w.toLowerCase())) newVocab.push({ topic_id: currentTopicId, user_id: currentUser.id, pt: w.toLowerCase(), en: r.vocab_translation || '' }); });
     }
   });
 
