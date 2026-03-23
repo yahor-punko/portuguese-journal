@@ -1045,16 +1045,29 @@ async function saveGlobalPrompt() {
 function buildPrompt(topic) {
   const globalPrompt = document.getElementById('global-prompt-input').value || DEFAULT_PROMPT;
   const vocab = (topic.vocab || []).map(v => `${v.pt} = ${v.en||v.ru||''}`).join(', ');
-  const openErrors = (topic.errors || []).filter(e => !e.fixed).map(e => e.text).join('; ');
+  const openErrors = (topic.errors || []).filter(e => !e.fixed);
   const recentExs = (topic.exercises || []).slice(-5);
   const recentPerf = recentExs.length ? `Recent sessions: ${recentExs.map(e => e.error_count + ' errors').join(', ')}` : '';
-  const sessionSeed = Date.now(); // forces uniqueness each generation
+  const sessionSeed = Date.now();
 
   let prompt = globalPrompt + '\n\n';
   prompt += `TOPIC: ${topic.unit ? topic.unit + ' — ' : ''}${topic.name}\n\n`;
   if (topic.custom_prompt) prompt += `TOPIC INSTRUCTIONS:\n${topic.custom_prompt}\n\n`;
   if (vocab) prompt += `KNOWN VOCABULARY (use these words in exercises):\n${vocab}\n\n`;
-  if (openErrors) prompt += `STUDENT ERRORS TO REINFORCE (at least 2 exercises must address these directly):\n${openErrors}\n\n`;
+  
+  // CRITICAL: If there are errors, 2-3 exercises MUST focus on them
+  if (openErrors.length > 0) {
+    const errorSample = openErrors.slice(0, 3).map(e => e.text).join('; ');
+    prompt += `CRITICAL INSTRUCTION - ERROR REINFORCEMENT:
+- Generate 5-7 exercises total
+- First 2-3 exercises: Create exercises that directly address these student errors:
+  ${errorSample}
+- Remaining exercises: Generate NEW exercises on other aspects of this topic
+- Make error-based exercises similar but not identical to the original mistakes
+
+`;
+  }
+  
   if (recentPerf) prompt += `${recentPerf}\n\n`;
   prompt += `SESSION ID: ${sessionSeed} — generate completely fresh exercises, different from any previous session.\n`;
   prompt += 'All text in English only. Return ONLY valid JSON.';
@@ -1536,6 +1549,10 @@ async function processGrading(results, answers) {
   // Add "New exercise" button after the existing button
   const btnRow = document.querySelector('.btn-row');
   if (btnRow) {
+    // Re-enable the Check answers button
+    const checkBtn = btnRow.querySelector('.btn:not(.btn-ghost)');
+    if (checkBtn) checkBtn.disabled = false;
+    
     // Check if "New exercise" button already exists
     const existingNewBtn = btnRow.querySelector('.btn-ghost');
     if (!existingNewBtn) {
