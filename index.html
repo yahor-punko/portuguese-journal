@@ -1527,16 +1527,25 @@ function renderExercise() {
 // GRADING
 // ══════════════════════════════════════════════════════
 async function submitExercise() {
-  if (!currentExercise || graded) return;
+  if (!currentExercise || graded) {
+    console.log('Submit blocked: graded =', graded, '| currentExercise =', !!currentExercise);
+    return;
+  }
   const apiKey = localStorage.getItem('pt_openai_key');
   if (!apiKey) { toast('No API key — go to Settings'); return; }
+  
   const items = currentExercise.items || [];
   const answers = items.map((item, i) => ({ question: item.question, expected: item.answer, given: (currentAnswers[i]||'').trim() }));
   
   // Disable inputs and button during grading
   items.forEach((_, i) => { const inp = document.getElementById('ex-inp-'+i); if (inp) inp.disabled = true; });
-  const checkBtn = document.querySelector('.exercise-box ~ .btn-row .btn');
-  if (checkBtn) checkBtn.disabled = true;
+  const checkBtn = document.querySelector('#exercise-area .btn-row .btn');
+  if (checkBtn) {
+    checkBtn.disabled = true;
+    console.log('✓ Button disabled for grading');
+  } else {
+    console.error('❌ Check button not found for disabling');
+  }
   
   const status = document.getElementById('gen-status');
   status.textContent = 'Grading'; status.classList.add('loading');
@@ -1704,16 +1713,29 @@ async function processGrading(results, answers) {
   // Replace "Check answers" button with "New exercise" button
   const btnRow = document.querySelector('#exercise-area .btn-row');
   
-  if (btnRow) {
-    const checkBtn = btnRow.querySelector('.btn:not(.btn-ghost)');
-    
-    if (checkBtn) {
-      checkBtn.textContent = 'New exercise →';
-      checkBtn.className = 'btn btn-ghost';
-      checkBtn.onclick = generateExercise;
-      checkBtn.disabled = false;
-    }
+  if (!btnRow) {
+    console.error('❌ btn-row NOT FOUND in #exercise-area');
+    console.log('exercise-area HTML:', document.getElementById('exercise-area')?.innerHTML?.substring(0, 500));
+    return; // Exit early if btn-row not found
   }
+  
+  const checkBtn = btnRow.querySelector('.btn:not(.btn-ghost)');
+  
+  if (!checkBtn) {
+    console.error('❌ Check button NOT FOUND in btn-row');
+    console.log('btn-row HTML:', btnRow.innerHTML);
+    return; // Exit early if button not found
+  }
+  
+  console.log('✓ Found button:', checkBtn.textContent, '| disabled:', checkBtn.disabled);
+  
+  // Replace with New exercise button
+  checkBtn.textContent = 'New exercise →';
+  checkBtn.className = 'btn btn-ghost';
+  checkBtn.onclick = generateExercise;
+  checkBtn.disabled = false;
+  
+  console.log('✓ Button replaced:', checkBtn.textContent, '| disabled:', checkBtn.disabled);
 
   renderTopicDetail();
   renderSidebarTopics();
