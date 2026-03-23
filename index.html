@@ -1658,7 +1658,12 @@ async function processGrading(results, answers) {
 
   // Save to Supabase
   const { data: exData } = await sb.from('exercises').insert({ topic_id: currentTopicId, user_id: currentUser.id, error_count: errorCount }).select().single();
-  if (exData) topic.exercises.push(exData);
+  if (exData) {
+    topic.exercises.push(exData);
+    console.log('Exercise saved:', exData);
+    console.log('Total exercises now:', topic.exercises.length);
+    console.log('Error count:', errorCount);
+  }
 
   if (newErrors.length) {
     const { data: errData } = await sb.from('errors').insert(newErrors).select();
@@ -1671,6 +1676,8 @@ async function processGrading(results, answers) {
 
   const banner = document.getElementById('result-banner');
   const pct = computeProgress(topic);
+  console.log('Computed progress:', pct + '%');
+  
   if (errorCount === 0) {
     banner.className = 'result-banner pass';
     banner.innerHTML = `✓ Perfect — ${results.length}/${results.length} correct!${pct===100?' Topic complete! 🎉':''}`;
@@ -1680,7 +1687,13 @@ async function processGrading(results, answers) {
   }
 
   // Add "New exercise" button after the existing button
-  const btnRow = document.querySelector('.btn-row');
+  let btnRow = document.querySelector('.btn-row');
+  
+  // Fallback: if btn-row not found, try finding it inside exercise-area
+  if (!btnRow) {
+    btnRow = document.querySelector('#exercise-area .btn-row');
+  }
+  
   if (btnRow) {
     // Re-enable the Check answers button
     const checkBtn = btnRow.querySelector('.btn:not(.btn-ghost)');
@@ -1695,6 +1708,8 @@ async function processGrading(results, answers) {
       newBtn.onclick = generateExercise;
       btnRow.appendChild(newBtn);
     }
+  } else {
+    console.error('btn-row not found after grading');
   }
 
   renderTopicDetail();
