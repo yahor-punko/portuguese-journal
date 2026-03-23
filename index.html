@@ -1390,11 +1390,35 @@ async function submitExercise() {
   const status = document.getElementById('gen-status');
   status.textContent = 'Grading'; status.classList.add('loading');
 
+  // Normalize answers for comparison (remove trailing punctuation and whitespace)
+  const normalizeText = (text) => text.toLowerCase().trim().replace(/[.,!?;:]+$/g, '').trim();
+  
+  const normalizedAnswers = answers.map(a => ({
+    question: a.question,
+    expected_raw: a.expected,
+    given_raw: a.given,
+    expected_normalized: normalizeText(a.expected),
+    given_normalized: normalizeText(a.given)
+  }));
+  
   const gradingPrompt = `You are grading a European Portuguese language exercise for an English-speaking learner.
-For each item: 
-1. Determine if the student answer is correct. Accept minor spelling variations but flag missing accents (é vs e, ã vs a, etc.) as errors.
-2. For WRONG answers: provide a short explanation in English (1-2 sentences) and grammar_category.
-3. For ALL answers: extract key Portuguese words from the correct answer and provide English translations.
+
+CRITICAL: Compare ONLY the normalized versions (expected_normalized vs given_normalized). These versions have punctuation and extra whitespace removed.
+
+GRADING RULES:
+1. If normalized versions match EXACTLY → mark as CORRECT (even if raw versions differ in punctuation)
+2. Check for missing/wrong accents: é vs e, ã vs a, ç vs c, ó vs o, etc.
+3. Check for incorrect verb forms, articles, gender agreement, word order
+4. DO NOT mention punctuation or capitalization in explanations — these are already normalized
+
+For CORRECT answers:
+- Set "correct": true
+- Leave "explanation": null
+
+For WRONG answers:
+- Set "correct": false  
+- Provide specific explanation (what grammar rule was violated)
+- DO NOT say "missing punctuation" or "capitalization" — focus on grammar/accents/words
 
 Return ONLY valid JSON:
 {
@@ -1404,14 +1428,14 @@ Return ONLY valid JSON:
       "explanation": null,
       "grammar_category": null,
       "vocab": [
-        {"pt": "estudante", "en": "student"},
-        {"pt": "sou", "en": "I am"}
+        {"pt": "estudante", "en": "student"}
       ]
     }
   ]
 }
 
-Items: ${JSON.stringify(answers, null, 2)}`;
+Items to grade:
+${JSON.stringify(normalizedAnswers, null, 2)}`;
 
   let results;
   try {
@@ -1424,7 +1448,15 @@ Items: ${JSON.stringify(answers, null, 2)}`;
     const raw = data.choices[0].message.content.trim().replace(/^```json\s*/,'').replace(/```\s*$/,'').trim();
     results = JSON.parse(raw).results;
   } catch {
-    results = answers.map(a => ({ correct: a.given.toLowerCase().trim() === a.expected.toLowerCase().trim(), vocab: [] }));
+    // Fallback: compare normalized versions
+    results = answers.map(a => {
+      const givenNorm = normalizeText(a.given);
+      const expectedNorm = normalizeText(a.expected);
+      return { 
+        correct: givenNorm === expectedNorm,
+        vocab: []
+      };
+    });
   } finally {
     status.classList.remove('loading');
     status.textContent = '';
