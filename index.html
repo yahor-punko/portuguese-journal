@@ -727,7 +727,14 @@ async function loadCachedExplanation() {
       </div>`;
     }
   }
-  // If no cached explanation, just leave empty - user will click "Generate exercise" button
+  
+  // If no cached explanation, show button to generate it
+  if (!cached || !cached.text) {
+    area.innerHTML = `<div style="text-align:center;padding:2rem;border:1px dashed var(--line);background:var(--white);margin-bottom:1.25rem;">
+      <div style="font-size:15px;color:var(--ink3);margin-bottom:1rem;font-style:italic;">No topic overview yet</div>
+      <button class="btn" onclick="generateTopicOverview()">Generate topic overview</button>
+    </div>`;
+  }
 }
 
 
@@ -1099,6 +1106,94 @@ ${lastExercises}
   
   prompt += 'All text in English only. Return ONLY valid JSON.';
   return prompt;
+}
+
+// Generate only topic overview without exercises
+async function generateTopicOverview() {
+  const apiKey = localStorage.getItem('pt_openai_key');
+  if (!apiKey) { toast('No API key — go to Settings'); return; }
+  const topic = getTopic(currentTopicId);
+  if (!topic) return;
+  
+  const area = document.getElementById('exercise-area');
+  const status = document.getElementById('gen-status');
+  
+  status.textContent = 'Generating topic overview'; 
+  status.classList.add('loading');
+  
+  const explainPrompt = `You are a European Portuguese (Portugal) language tutor. The student is starting a new topic.
+Topic: ${topic.unit ? topic.unit + ' — ' : ''}${topic.name}
+${topic.custom_prompt ? 'Focus: ' + topic.custom_prompt : ''}
+
+Provide a structured topic explanation in English. Return ONLY valid JSON with this format:
+{
+  "summary": "2-3 sentence overview of what this topic covers",
+  "key_rules": ["rule 1", "rule 2", "rule 3"],
+  "examples": [
+    {"pt": "Eu sou estudante.", "en": "I am a student."},
+    {"pt": "Ela é professora.", "en": "She is a teacher."}
+  ],
+  "artifacts": {
+    "verbs": [
+      {
+        "infinitive": "ser",
+        "translation": "to be",
+        "tense": "Present",
+        "conjugations": [
+          {"pronoun": "eu", "form": "sou"},
+          {"pronoun": "tu", "form": "és"},
+          {"pronoun": "ele/ela/você", "form": "é"},
+          {"pronoun": "nós", "form": "somos"},
+          {"pronoun": "vós", "form": "sois"},
+          {"pronoun": "eles/elas/vocês", "form": "são"}
+        ]
+      }
+    ],
+    "possessives": ["meu/minha (my)", "teu/tua (your)", "seu/sua (his/her/your formal)"],
+    "articles": ["o/a (the)", "um/uma (a/an)"],
+    "pronouns": ["eu (I)", "tu (you)", "ele/ela (he/she)"]
+  }
+}
+
+IMPORTANT RULES:
+- For VERBS: always provide full conjugation table with all 6 persons (eu, tu, ele/ela/você, nós, vós, eles/elas/vocês)
+- Specify the tense (Present, Pretérito Perfeito, Imperativo, etc.)
+- For other artifact categories (possessives, articles, pronouns, prepositions, adjectives, adverbs, conjunctions): use simple "Portuguese (English)" format
+- Include ONLY artifact categories relevant to this topic
+- If multiple verbs are covered, include all of them with conjugations`;
+
+  try {
+    const res = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+      body: JSON.stringify({ model: 'gpt-4o', temperature: 0.5, messages: [{ role: 'user', content: explainPrompt }] })
+    });
+    const data = await res.json();
+    
+    if (res.ok) {
+      const rawText = data.choices[0].message.content.trim();
+      const cleanedText = rawText.replace(/^```json\s*/,'').replace(/```\s*$/,'').trim();
+      const explainData = JSON.parse(cleanedText);
+      
+      // Save to cache
+      await sb.from('explanations').upsert({
+        topic_id: currentTopicId,
+        user_id: currentUser.id,
+        text: JSON.stringify(explainData),
+        updated_at: new Date().toISOString()
+      });
+      
+      // Render the explanation
+      await loadCachedExplanation();
+      toast('Topic overview generated!');
+    }
+  } catch(e) { 
+    console.error('Explanation generation error:', e);
+    toast('Error generating topic overview');
+  } finally {
+    status.classList.remove('loading');
+    status.textContent = '';
+  }
 }
 
 async function explainThenGenerate() {
