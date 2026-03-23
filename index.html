@@ -45,6 +45,7 @@ aside{background:var(--white);border-right:1px solid var(--line);display:flex;fl
 .aside-label{font-family:'Geist Mono',monospace;font-size:9px;letter-spacing:.14em;color:var(--ink4);text-transform:uppercase;padding:.5rem .5rem .3rem;display:block;}
 .nav-btn{width:100%;display:flex;align-items:center;gap:8px;padding:7px 10px;border:none;background:none;font-family:'EB Garamond',serif;font-size:15px;color:var(--ink3);text-align:left;cursor:pointer;border-radius:4px;transition:all .15s;}
 .nav-btn:hover{background:var(--bg);color:var(--ink);}
+.nav-btn:hover .delete-topic-btn{opacity:0.6 !important;}
 .nav-btn.active{background:var(--bg);color:var(--ink);font-weight:500;}
 .nav-btn .progress-pill{margin-left:auto;font-family:'Geist Mono',monospace;font-size:10px;padding:1px 6px;border-radius:10px;background:var(--bg);color:var(--ink3);border:1px solid var(--line);white-space:nowrap;}
 .nav-btn .progress-pill.done{background:var(--green-bg);color:var(--green);border-color:var(--green-line);}
@@ -526,9 +527,25 @@ async function loadAllData() {
       errors: (errorsData || []).filter(e => e.topic_id === t.id)
     }));
 
-    // Load global prompt
+    // Load global prompt with auto-migration
+    const PROMPT_VERSION = 2; // increment when you update DEFAULT_PROMPT
     const { data: settingsData } = await sb.from('settings').select('*').eq('user_id', currentUser.id).single();
-    const globalPrompt = settingsData?.global_prompt || DEFAULT_PROMPT;
+    
+    let globalPrompt = settingsData?.global_prompt || DEFAULT_PROMPT;
+    const savedVersion = settingsData?.prompt_version || 0;
+    
+    // Auto-migrate to new default if user hasn't customized
+    if (savedVersion < PROMPT_VERSION && (!settingsData || !settingsData.custom_prompt_edited)) {
+      globalPrompt = DEFAULT_PROMPT;
+      await sb.from('settings').upsert({ 
+        user_id: currentUser.id, 
+        global_prompt: DEFAULT_PROMPT,
+        prompt_version: PROMPT_VERSION,
+        custom_prompt_edited: false,
+        updated_at: new Date().toISOString() 
+      });
+    }
+    
     document.getElementById('global-prompt-input').value = globalPrompt;
 
     setSyncStatus('synced');
@@ -632,9 +649,10 @@ function renderSidebarTopics() {
     const pct = computeProgress(t);
     const active = t.id === currentTopicId ? ' active' : '';
     const pillClass = pct === 100 ? ' done' : '';
-    return `<button class="nav-btn${active}" onclick="showTopicDetail(${t.id})">
+    return `<button class="nav-btn${active}" onclick="showTopicDetail(${t.id})" style="position:relative;padding-right:32px;">
       <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left">${t.name}</span>
       <span class="progress-pill${pillClass}">${pct}%</span>
+      <span onclick="event.stopPropagation();deleteTopic(${t.id},'${t.name.replace(/'/g,"\\'")}');" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);opacity:0;transition:opacity .15s;color:var(--red);cursor:pointer;font-size:18px;line-height:1;padding:2px 4px;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.6'" class="delete-topic-btn">×</span>
     </button>`;
   }).join('');
 }
@@ -746,6 +764,38 @@ async function saveTopic() {
   renderSidebarTopics();
   renderHomeList();
   toast(editingTopicId ? 'Topic updated' : 'Topic added');
+}
+
+async function deleteTopic(topicId, topicName) {
+  if (!confirm(`Delete "${topicName}"?\n\nThis will permanently delete:\n• All exercises\n• All vocabulary\n• All errors\n• Topic explanation\n\nThis cannot be undone.`)) return;
+  
+  const topic = getTopic(topicId);
+  if (!topic) return;
+  
+  try {
+    // Delete from Supabase
+    await sb.from('exercises').delete().eq('topic_id', topicId).eq('user_id', currentUser.id);
+    await sb.from('vocab').delete().eq('topic_id', topicId).eq('user_id', currentUser.id);
+    await sb.from('errors').delete().eq('topic_id', topicId).eq('user_id', currentUser.id);
+    await sb.from('explanations').delete().eq('topic_id', topicId).eq('user_id', currentUser.id);
+    await sb.from('topics').delete().eq('id', topicId).eq('user_id', currentUser.id);
+    
+    // Remove from local state
+    const idx = topics.findIndex(t => t.id === topicId);
+    if (idx !== -1) topics.splice(idx, 1);
+    
+    // Clear view if currently viewing this topic
+    if (currentTopicId === topicId) {
+      currentTopicId = null;
+      showHome();
+    }
+    
+    renderSidebarTopics();
+    renderHomeList();
+    toast(`"${topicName}" deleted`);
+  } catch(e) {
+    toast('Error deleting topic: ' + e.message);
+  }
 }
 
 // ══════════════════════════════════════════════════════
@@ -875,7 +925,12 @@ function saveApiKey() {
 
 async function saveGlobalPrompt() {
   const val = document.getElementById('global-prompt-input').value;
-  await sb.from('settings').upsert({ user_id: currentUser.id, global_prompt: val, updated_at: new Date().toISOString() });
+  await sb.from('settings').upsert({ 
+    user_id: currentUser.id, 
+    global_prompt: val,
+    custom_prompt_edited: true, // mark as manually edited
+    updated_at: new Date().toISOString() 
+  });
   toast('Global prompt saved & synced');
 }
 
@@ -908,9 +963,24 @@ async function explainThenGenerate() {
   if (!topic) return;
   const area = document.getElementById('exercise-area');
   const status = document.getElementById('gen-status');
-  status.textContent = 'Loading topic explanation'; status.classList.add('loading');
+  
+  // Check cache first
+  let explanation = null;
+  const { data: cached } = await sb.from('explanations').select('*').eq('topic_id', currentTopicId).eq('user_id', currentUser.id).single();
+  
+  if (cached && cached.text) {
+    // Use cached explanation
+    explanation = cached.text;
+    area.innerHTML = `<div style="border:1px solid var(--line);padding:1.25rem 1.5rem;background:var(--white);margin-bottom:1.25rem;">
+      <div style="font-family:'Geist Mono',monospace;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink3);margin-bottom:.75rem;">Topic overview</div>
+      <div style="font-size:15px;color:var(--ink2);line-height:1.75;white-space:pre-line;">${explanation}</div>
+    </div>`;
+  } else {
+    // Generate new explanation
+    status.textContent = 'Loading topic explanation'; 
+    status.classList.add('loading');
 
-  const explainPrompt = `You are a European Portuguese (Portugal) language tutor. The student is starting a new topic.
+    const explainPrompt = `You are a European Portuguese (Portugal) language tutor. The student is starting a new topic.
 Topic: ${topic.unit ? topic.unit + ' — ' : ''}${topic.name}
 ${topic.custom_prompt ? 'Focus: ' + topic.custom_prompt : ''}
 
@@ -921,24 +991,35 @@ Write a concise topic explanation in English (max 150 words) covering:
 
 Format as plain text, no markdown headers, no bullet symbols. Just clear paragraphs.`;
 
-  try {
-    const res = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-      body: JSON.stringify({ model: 'gpt-4.1-mini', temperature: 0.5, messages: [{ role: 'user', content: explainPrompt }] })
-    });
-    const data = await res.json();
-    if (res.ok) {
-      const explanation = data.choices[0].message.content.trim();
-      area.innerHTML = `<div style="border:1px solid var(--line);padding:1.25rem 1.5rem;background:var(--white);margin-bottom:1.25rem;">
-        <div style="font-family:'Geist Mono',monospace;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink3);margin-bottom:.75rem;">Topic overview</div>
-        <div style="font-size:15px;color:var(--ink2);line-height:1.75;white-space:pre-line;">${explanation}</div>
-      </div>`;
-    }
-  } catch(e) { /* silent fail — just skip explanation */ }
+    try {
+      const res = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+        body: JSON.stringify({ model: 'gpt-4o', temperature: 0.5, messages: [{ role: 'user', content: explainPrompt }] })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        explanation = data.choices[0].message.content.trim();
+        
+        // Save to cache
+        await sb.from('explanations').upsert({
+          topic_id: currentTopicId,
+          user_id: currentUser.id,
+          text: explanation,
+          updated_at: new Date().toISOString()
+        });
+        
+        area.innerHTML = `<div style="border:1px solid var(--line);padding:1.25rem 1.5rem;background:var(--white);margin-bottom:1.25rem;">
+          <div style="font-family:'Geist Mono',monospace;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink3);margin-bottom:.75rem;">Topic overview</div>
+          <div style="font-size:15px;color:var(--ink2);line-height:1.75;white-space:pre-line;">${explanation}</div>
+        </div>`;
+      }
+    } catch(e) { /* silent fail — just skip explanation */ }
 
-  status.classList.remove('loading');
-  status.textContent = '';
+    status.classList.remove('loading');
+    status.textContent = '';
+  }
+
   await generateExercise();
 }
 
@@ -958,7 +1039,7 @@ async function generateExercise() {
     const res = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-      body: JSON.stringify({ model: 'gpt-4.1-mini', temperature: 0.7, messages: [{ role: 'user', content: buildPrompt(topic) }] })
+      body: JSON.stringify({ model: 'gpt-4o', temperature: 0.7, messages: [{ role: 'user', content: buildPrompt(topic) }] })
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error?.message || `HTTP ${res.status}`);
@@ -1027,7 +1108,7 @@ Items: ${JSON.stringify(answers, null, 2)}`;
     const res = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-      body: JSON.stringify({ model: 'gpt-4.1-mini', temperature: 0, messages: [{ role: 'user', content: gradingPrompt }] })
+      body: JSON.stringify({ model: 'gpt-4o', temperature: 0, messages: [{ role: 'user', content: gradingPrompt }] })
     });
     const data = await res.json();
     const raw = data.choices[0].message.content.trim().replace(/^```json\s*/,'').replace(/```\s*$/,'').trim();
