@@ -1694,16 +1694,31 @@ async function processGrading(results, answers) {
     btnRow = document.querySelector('#exercise-area .btn-row');
   }
   
+  console.log('=== Button replacement debug ===');
+  console.log('btnRow found:', !!btnRow);
+  
   if (btnRow) {
     // Find the Check answers button
     const checkBtn = btnRow.querySelector('.btn:not(.btn-ghost)');
+    console.log('checkBtn found:', !!checkBtn);
+    console.log('checkBtn before:', checkBtn ? {
+      text: checkBtn.textContent,
+      disabled: checkBtn.disabled,
+      className: checkBtn.className
+    } : null);
     
     if (checkBtn) {
       // Replace with New exercise button
-      checkBtn.disabled = false;
       checkBtn.textContent = 'New exercise →';
       checkBtn.className = 'btn btn-ghost';
       checkBtn.onclick = generateExercise;
+      checkBtn.disabled = false; // Enable AFTER changing text and handler
+      
+      console.log('checkBtn after:', {
+        text: checkBtn.textContent,
+        disabled: checkBtn.disabled,
+        className: checkBtn.className
+      });
     }
   } else {
     console.error('btn-row not found after grading');
