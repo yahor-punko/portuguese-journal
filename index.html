@@ -1618,8 +1618,18 @@ ${JSON.stringify(normalizedAnswers, null, 2)}`;
 }
 
 async function processGrading(results, answers) {
+  console.log('=== processGrading START ===');
+  console.log('Results:', results);
+  console.log('Answers:', answers);
+  
   const topic = getTopic(currentTopicId);
-  if (!topic) return;
+  if (!topic) {
+    console.error('Topic not found!');
+    return;
+  }
+  
+  console.log('Topic:', topic);
+  
   let errorCount = 0;
   const newErrors = [], newVocab = [];
 
@@ -1656,6 +1666,11 @@ async function processGrading(results, answers) {
     }
   });
 
+  console.log('=== After processing results ===');
+  console.log('Error count:', errorCount);
+  console.log('New errors:', newErrors.length);
+  console.log('New vocab:', newVocab.length);
+
   // Save to Supabase (wrapped in try-catch to ensure UI updates always happen)
   try {
     const { data: exData, error: exError } = await sb.from('exercises').insert({ topic_id: currentTopicId, user_id: currentUser.id, error_count: errorCount }).select().single();
@@ -1690,7 +1705,11 @@ async function processGrading(results, answers) {
     // Continue to show results even if DB fails
   }
 
+  console.log('=== Showing result banner ===');
+  
   const banner = document.getElementById('result-banner');
+  console.log('Banner element:', banner);
+  
   const pct = computeProgress(topic);
   console.log('Computed progress:', pct + '%');
   
