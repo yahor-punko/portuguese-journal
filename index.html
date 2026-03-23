@@ -1673,7 +1673,13 @@ async function processGrading(results, answers) {
 
   // Save to Supabase (wrapped in try-catch to ensure UI updates always happen)
   try {
+    console.log('=== Saving to database ===');
+    console.log('Attempting to save exercise...');
+    
     const { data: exData, error: exError } = await sb.from('exercises').insert({ topic_id: currentTopicId, user_id: currentUser.id, error_count: errorCount }).select().single();
+    
+    console.log('Exercise save completed');
+    
     if (exError) {
       console.error('Error saving exercise:', exError);
     } else if (exData) {
@@ -1684,7 +1690,10 @@ async function processGrading(results, answers) {
     }
 
     if (newErrors.length) {
+      console.log('Attempting to save errors...');
       const { data: errData, error: errError } = await sb.from('errors').insert(newErrors).select();
+      console.log('Errors save completed');
+      
       if (errError) {
         console.error('Error saving errors:', errError);
       } else if (errData) {
@@ -1693,13 +1702,18 @@ async function processGrading(results, answers) {
     }
     
     if (newVocab.length) {
+      console.log('Attempting to save vocab...');
       const { data: vocData, error: vocError } = await sb.from('vocab').upsert(newVocab, { onConflict: 'topic_id,pt', ignoreDuplicates: true }).select();
+      console.log('Vocab save completed');
+      
       if (vocError) {
         console.error('Error saving vocab:', vocError);
       } else if (vocData) {
         vocData.forEach(v => { if (!topic.vocab.find(x => x.id === v.id)) topic.vocab.push(v); });
       }
     }
+    
+    console.log('=== Database operations complete ===');
   } catch (dbError) {
     console.error('Database operation failed:', dbError);
     // Continue to show results even if DB fails
