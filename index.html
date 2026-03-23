@@ -1656,22 +1656,38 @@ async function processGrading(results, answers) {
     }
   });
 
-  // Save to Supabase
-  const { data: exData } = await sb.from('exercises').insert({ topic_id: currentTopicId, user_id: currentUser.id, error_count: errorCount }).select().single();
-  if (exData) {
-    topic.exercises.push(exData);
-    console.log('Exercise saved:', exData);
-    console.log('Total exercises now:', topic.exercises.length);
-    console.log('Error count:', errorCount);
-  }
+  // Save to Supabase (wrapped in try-catch to ensure UI updates always happen)
+  try {
+    const { data: exData, error: exError } = await sb.from('exercises').insert({ topic_id: currentTopicId, user_id: currentUser.id, error_count: errorCount }).select().single();
+    if (exError) {
+      console.error('Error saving exercise:', exError);
+    } else if (exData) {
+      topic.exercises.push(exData);
+      console.log('Exercise saved:', exData);
+      console.log('Total exercises now:', topic.exercises.length);
+      console.log('Error count:', errorCount);
+    }
 
-  if (newErrors.length) {
-    const { data: errData } = await sb.from('errors').insert(newErrors).select();
-    if (errData) topic.errors.push(...errData);
-  }
-  if (newVocab.length) {
-    const { data: vocData } = await sb.from('vocab').upsert(newVocab, { onConflict: 'topic_id,pt', ignoreDuplicates: true }).select();
-    if (vocData) { vocData.forEach(v => { if (!topic.vocab.find(x => x.id === v.id)) topic.vocab.push(v); }); }
+    if (newErrors.length) {
+      const { data: errData, error: errError } = await sb.from('errors').insert(newErrors).select();
+      if (errError) {
+        console.error('Error saving errors:', errError);
+      } else if (errData) {
+        topic.errors.push(...errData);
+      }
+    }
+    
+    if (newVocab.length) {
+      const { data: vocData, error: vocError } = await sb.from('vocab').upsert(newVocab, { onConflict: 'topic_id,pt', ignoreDuplicates: true }).select();
+      if (vocError) {
+        console.error('Error saving vocab:', vocError);
+      } else if (vocData) {
+        vocData.forEach(v => { if (!topic.vocab.find(x => x.id === v.id)) topic.vocab.push(v); });
+      }
+    }
+  } catch (dbError) {
+    console.error('Database operation failed:', dbError);
+    // Continue to show results even if DB fails
   }
 
   const banner = document.getElementById('result-banner');
