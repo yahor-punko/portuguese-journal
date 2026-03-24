@@ -418,7 +418,7 @@ main{padding:2.5rem 3rem;max-width:760px;}
             <input type="number" id="admin-prompt-overview-temp" min="0" max="2" step="0.05" value="0.2">
           </div>
         </div>
-        <button class="btn" onclick="savePrompt('topic_overview')">Save Overview Prompt</button>
+        <button class="btn" onclick="savePrompt('overview')">Save Overview Prompt</button>
       </div>
       
       <div class="settings-section">
@@ -1938,16 +1938,17 @@ async function saveGlobalApiKey() {
   }
 }
 
-async function savePrompt(promptType) {
+async function savePrompt(uiType) {
   // Map UI names to DB names
-  const dbType = promptType === 'overview' ? 'topic_overview' : promptType;
+  // UI: 'overview' → DB: 'topic_overview'
+  const dbType = uiType === 'overview' ? 'topic_overview' : uiType;
   
-  const contentEl = document.getElementById(`admin-prompt-${promptType}`);
-  const modelEl = document.getElementById(`admin-prompt-${promptType}-model`);
-  const tempEl = document.getElementById(`admin-prompt-${promptType}-temp`);
+  const contentEl = document.getElementById(`admin-prompt-${uiType}`);
+  const modelEl = document.getElementById(`admin-prompt-${uiType}-model`);
+  const tempEl = document.getElementById(`admin-prompt-${uiType}-temp`);
   
   if (!contentEl || !modelEl || !tempEl) {
-    console.error(`Elements not found for prompt type: ${promptType}`);
+    console.error(`Elements not found for UI type: ${uiType} (DB type: ${dbType})`);
     toast('Error: Form elements not found');
     return;
   }
@@ -1982,7 +1983,8 @@ async function savePrompt(promptType) {
     console.error('Error saving prompt:', error);
     toast('Error saving prompt');
   } else {
-    toast(`${promptType} prompt saved (v${version})`);
+    const displayName = uiType === 'overview' ? 'topic overview' : uiType;
+    toast(`${displayName} prompt saved (v${version})`);
     await loadSystemPrompts();
     await loadAdminPanel();
   }
