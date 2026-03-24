@@ -525,7 +525,7 @@ const EXERCISE_SCHEMA = {
       items: {
         type: "object",
         additionalProperties: false,
-        required: ["type", "question", "canonical_answer", "accepted_variants", "grammar_category", "explanation"],
+        required: ["type", "question", "canonical_answer", "accepted_variants", "options", "grammar_category", "explanation"],
         properties: {
           type: {
             type: "string",
@@ -538,7 +538,7 @@ const EXERCISE_SCHEMA = {
             items: { type: "string" }
           },
           options: {
-            type: ["array", "null"],
+            type: "array",
             items: { type: "string" }
           },
           grammar_category: { type: "string" },
@@ -586,7 +586,7 @@ const VALIDATOR_SCHEMA = {
           item: {
             type: "object",
             additionalProperties: false,
-            required: ["type", "question", "canonical_answer", "accepted_variants", "grammar_category", "explanation"],
+            required: ["type", "question", "canonical_answer", "accepted_variants", "options", "grammar_category", "explanation"],
             properties: {
               type: {
                 type: "string",
@@ -599,7 +599,7 @@ const VALIDATOR_SCHEMA = {
                 items: { type: "string" }
               },
               options: {
-                type: ["array", "null"],
+                type: "array",
                 items: { type: "string" }
               },
               grammar_category: { type: "string" },
@@ -720,7 +720,7 @@ Return ONLY valid JSON:
       "question": "...",
       "canonical_answer": "...",
       "accepted_variants": ["...", "..."],
-      "options": ["a) ...", "b) ...", "c) ...", "d) ..."] OR null,
+      "options": ["a) ...", "b) ...", "c) ...", "d) ..."] OR [],
       "grammar_category": "...",
       "explanation": "short explanation"
     }
@@ -743,8 +743,8 @@ ANSWERS:
 - Do NOT generate exercises where correctness depends on hidden context
 
 OPTIONS FIELD:
-- For type="choice" → options must be an array of 4 strings ["a) ...", "b) ...", "c) ...", "d) ..."]
-- For all other types → options must be null
+- For type="choice" → options MUST be ["a) option1", "b) option2", "c) option3", "d) option4"]
+- For all other types → options MUST be [] (empty array)
 - canonical_answer for choice must match one option exactly (including the letter)
 
 QUALITY:
