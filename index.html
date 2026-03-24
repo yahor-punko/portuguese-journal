@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Português — Learning Journal</title>
-<!-- VERSION: v7.2-FINAL (Simplified Artifacts Schema) | Build: 2026-03-24 -->
+<!-- VERSION: v7.3-FINAL (All Artifacts Required) | Build: 2026-03-24 -->
 <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;1,400&family=Geist+Mono:wght@300;400;500&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <style>
@@ -401,10 +401,10 @@ main{padding:2.5rem 3rem;max-width:760px;}
 // ══════════════════════════════════════════════════════
 // VERSION INFO
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v7.2-FINAL';
+const APP_VERSION = 'v7.3-FINAL';
 const BUILD_DATE = '2026-03-24';
 console.log(`%c🇵🇹 Portuguese Learning Journal ${APP_VERSION}`, 'font-weight: bold; font-size: 14px; color: #2a6b3f;');
-console.log(`Build: ${BUILD_DATE} | Simplified Artifacts Schema`);
+console.log(`Build: ${BUILD_DATE} | All Artifacts Required (OpenAI Structured Outputs Compliance)`);
 
 // ══════════════════════════════════════════════════════
 // CONFIG — replace with your Supabase project values
@@ -476,8 +476,47 @@ const TOPIC_OVERVIEW_SCHEMA = {
     },
     artifacts: {
       type: "object",
-      description: "Optional grammar artifacts (verbs, possessives, articles, etc.). Include only relevant categories for this topic."
-      // No additionalProperties or properties - allows any structure
+      additionalProperties: false,
+      required: ["verbs", "possessives", "articles", "pronouns", "prepositions", "adjectives", "adverbs", "conjunctions"],
+      properties: {
+        verbs: {
+          type: "array",
+          items: {
+            type: "object",
+            additionalProperties: false,
+            required: ["infinitive", "translation", "tense", "conjugations"],
+            properties: {
+              infinitive: { type: "string" },
+              translation: { type: "string" },
+              tense: { type: "string" },
+              conjugations: {
+                type: "array",
+                items: {
+                  type: "object",
+                  additionalProperties: false,
+                  required: ["pronoun", "form"],
+                  properties: {
+                    pronoun: {
+                      type: "string",
+                      enum: ["eu", "tu", "ele/ela/você", "nós", "vós", "eles/elas/vocês"]
+                    },
+                    form: { type: "string" }
+                  }
+                },
+                minItems: 6,
+                maxItems: 6
+              }
+            }
+          }
+        },
+        possessives: { type: "array", items: { type: "string" } },
+        articles: { type: "array", items: { type: "string" } },
+        pronouns: { type: "array", items: { type: "string" } },
+        prepositions: { type: "array", items: { type: "string" } },
+        adjectives: { type: "array", items: { type: "string" } },
+        adverbs: { type: "array", items: { type: "string" } },
+        conjunctions: { type: "array", items: { type: "string" } }
+      }
     }
   }
 };
@@ -781,14 +820,23 @@ Return ONLY valid JSON with this structure:
           {"pronoun": "eles/elas/vocês", "form": "..."}
         ]
       }
-    ]
+    ],
+    "possessives": ["meu", "teu", "seu", ...],
+    "articles": ["o", "a", "os", "as", ...],
+    "pronouns": [...],
+    "prepositions": [...],
+    "adjectives": [...],
+    "adverbs": [...],
+    "conjunctions": [...]
   }
 }
 
 Rules:
 - Use ONLY European Portuguese (Portugal)
 - Be factually correct and simple (A1/A2 level)
-- Include ONLY relevant artifact categories
+- ALL artifact categories MUST be present (verbs, possessives, articles, pronouns, prepositions, adjectives, adverbs, conjunctions)
+- If a category is not relevant, return an EMPTY array [] for that category
+- Do NOT omit any category - schema requires all 8 fields
 - Prefer correctness over completeness
 - No ambiguity or alternative interpretations
 - No markdown, no explanations outside JSON`;
