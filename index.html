@@ -742,8 +742,8 @@ Return ONLY valid JSON:
 STRICT RULES:
 
 GENERAL:
-- Use ONLY European Portuguese (Portugal)
-- All instructions/questions in English
+- Use European Portuguese (Portugal) ONLY for Portuguese text
+- All instructions and questions MUST be in English
 - Generate 5–7 exercises
 - Prefer correctness over creativity
 - Avoid ambiguity at all costs
@@ -763,11 +763,13 @@ QUALITY:
 - Portuguese must sound natural to a native speaker from Portugal
 - Grammar must be 100% correct
 - explanation MUST match the canonical_answer
+- Keep explanations short, simple, and A1/A2 level
 
 VARIETY:
 - Vary subjects (eu, tu, ele, nós, vocês, etc.)
 - Vary contexts (daily life, work, travel, etc.)
 - Do NOT repeat structure from recent exercises
+- Ensure each exercise is structurally different, not just different words
 
 CHOICE TYPE:
 - Only ONE correct option
@@ -776,17 +778,32 @@ CHOICE TYPE:
 
 BATCH QUALITY RULES:
 - Do not generate duplicate or near-duplicate questions within the same batch
-- Do not generate two questions that test the exact same wording pattern unless they differ clearly in grammar focus
+- Treat questions as duplicates if they share the same sentence structure with only minor word changes (e.g., different names, professions, or nouns)
+
+- Do not generate more than one exercise using the same core grammar pattern (e.g., "Sou ___", "És ___", "Como te chamas?")
+
+- Ensure each exercise tests a different micro-skill (e.g., verb conjugation, pronoun use, word order, article usage)
+
+- Avoid repeating the same verb + person combination across multiple exercises unless the task type is fundamentally different
+
+- Each item must be structurally distinct, not just lexically different
+
 - For type="choice", always provide exactly 4 non-empty options
 - All 4 options must be different
 - If you cannot generate 4 good options, do not generate a choice item
+
 - The batch must contain varied items, not repeated templates
+
+SELF-CHECK:
+- Before finalizing, compare all generated items and remove any that are structurally similar or repetitive
 
 IMPORTANT:
 - If an exercise is ambiguous → DO NOT generate it
 - If unsure → generate a simpler exercise
 
-Return ONLY JSON.`;
+OUTPUT:
+- Return ONLY valid JSON
+- Do NOT include any text before or after JSON`;
 
 /**
  * Build prompt for topic overview generation
@@ -831,15 +848,38 @@ Return ONLY valid JSON with this structure:
   }
 }
 
+Context:
+- This topic is based on the textbook "Portuguese a Valor"
+- Use a simple, structured, practical teaching style focused on real-life usage
+
 Rules:
-- Use ONLY European Portuguese (Portugal)
-- Be factually correct and simple (A1/A2 level)
-- ALL artifact categories MUST be present (verbs, possessives, articles, pronouns, prepositions, adjectives, adverbs, conjunctions)
-- If a category is not relevant, return an EMPTY array [] for that category
-- Do NOT omit any category - schema requires all 8 fields
-- Prefer correctness over completeness
-- No ambiguity or alternative interpretations
-- No markdown, no explanations outside JSON`;
+- The explanation (summary, key_rules) MUST be in English
+- Use European Portuguese (Portugal) ONLY for Portuguese text
+- Examples must be bilingual: pt (PT-PT), en (English)
+
+Output language rules:
+- summary: English only
+- key_rules: English only
+- examples.pt: European Portuguese only
+- examples.en: English only
+- No Portuguese explanations outside examples.pt
+
+- Return ONLY valid JSON
+- Do NOT include any text before or after JSON
+- All required fields MUST be present
+- If a category is not relevant, return EXACTLY []
+
+- ALL artifact categories MUST be present
+- Do NOT invent data
+
+- Keep explanations strictly at A1/A2 level
+- Use simple language, short sentences
+- Avoid linguistic jargon
+
+- Follow a practical, beginner-friendly teaching style (Portuguese a Valor style)
+
+- If unsure, choose the simplest correct explanation
+- Do NOT hallucinate`;
 }
 /**
  * Build prompt for exercise generation
