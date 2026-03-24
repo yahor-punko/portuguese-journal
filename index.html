@@ -974,8 +974,7 @@ async function loadAllData() {
         user_id: currentUser.id, 
         global_prompt: DEFAULT_PROMPT,
         prompt_version: PROMPT_VERSION,
-        custom_prompt_edited: false,
-        updated_at: new Date().toISOString() 
+        custom_prompt_edited: false
       });
     }
     
@@ -1464,8 +1463,7 @@ async function saveGlobalPrompt() {
   await sb.from('settings').upsert({ 
     user_id: currentUser.id, 
     global_prompt: val,
-    custom_prompt_edited: true, // mark as manually edited
-    updated_at: new Date().toISOString() 
+    custom_prompt_edited: true // mark as manually edited
   });
   toast('Global prompt saved & synced');
 }
