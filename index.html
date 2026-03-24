@@ -762,6 +762,14 @@ CHOICE TYPE:
 - canonical_answer must exactly match one item from options
 - All other options must be clearly wrong
 
+BATCH QUALITY RULES:
+- Do not generate duplicate or near-duplicate questions within the same batch
+- Do not generate two questions that test the exact same wording pattern unless they differ clearly in grammar focus
+- For type="choice", always provide exactly 4 non-empty options
+- All 4 options must be different
+- If you cannot generate 4 good options, do not generate a choice item
+- The batch must contain varied items, not repeated templates
+
 IMPORTANT:
 - If an exercise is ambiguous → DO NOT generate it
 - If unsure → generate a simpler exercise
@@ -1511,6 +1519,13 @@ Check the following:
 8. Is grammar_category correct?
 9. Is the level appropriate for A1/A2?
 
+ADDITIONAL VALIDATION RULES:
+- Reject any choice item that has fewer or more than 4 options
+- Reject any choice item with duplicate options
+- Reject any batch containing duplicate or near-duplicate questions
+- Reject any two items that test the same sentence pattern with only trivial word changes
+- Reject malformed items that do not match their declared type
+
 Return structured JSON with issues categorized by severity and type.
 
 CRITICAL:
@@ -1521,6 +1536,8 @@ CRITICAL:
 - Reject grammar errors (GRAMMAR_ERROR)
 - Reject wrong grammar category (WRONG_GRAMMAR_CATEGORY)
 - Reject if too difficult (LEVEL_MISMATCH)
+- Reject choice with wrong number of options (INVALID_CHOICE_OPTIONS)
+- Reject duplicate questions (DUPLICATE_QUESTIONS)
 
 Input:
 ${JSON.stringify(exerciseJSON, null, 2)}`;
@@ -1655,6 +1672,43 @@ function renderTopicExplanation(explainData) {
 // ══════════════════════════════════════════════════════
 // EXERCISE VALIDATION & GENERATION
 // ══════════════════════════════════════════════════════
+/**
+ * Client-side validation: check if choice item has exactly 4 unique options
+ */
+function isValidChoiceItem(item) {
+  if (item.type !== 'choice') return true;
+  if (!Array.isArray(item.options)) return false;
+  if (item.options.length !== 4) return false;
+  const cleaned = item.options.map(x => String(x).trim().toLowerCase());
+  if (cleaned.some(x => !x)) return false; // No empty options
+  if (new Set(cleaned).size !== 4) return false; // All must be unique
+  return true;
+}
+
+/**
+ * Client-side validation: normalize question text for duplicate detection
+ */
+function normalizeQuestion(q) {
+  return String(q)
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .replace(/[.,!?;:]/g, '')
+    .trim();
+}
+
+/**
+ * Client-side validation: check for duplicate or near-duplicate questions
+ */
+function hasDuplicateQuestions(items) {
+  const seen = new Set();
+  for (const item of items) {
+    const q = normalizeQuestion(item.question);
+    if (seen.has(q)) return true;
+    seen.add(q);
+  }
+  return false;
+}
+
 /**
  * Validate exercise quality before showing to user
  */
@@ -1796,7 +1850,53 @@ async function generateExercise() {
       schemaName: 'exercise_generation'
     });
     
-    // Validate exercises
+    // Client-side validation BEFORE API validator
+    const clientErrors = [];
+    
+    // Check choice items
+    exerciseData.items.forEach((item, i) => {
+      if (!isValidChoiceItem(item)) {
+        const error = `Item ${i+1}: Invalid choice options (expected 4 unique options, got ${item.options?.length || 0})`;
+        clientErrors.push(error);
+        console.error('❌ Choice validation failed:', { 
+          index: i, 
+          type: item.type, 
+          options: item.options,
+          optionsCount: item.options?.length
+        });
+      }
+    });
+    
+    // Check for duplicate questions
+    if (hasDuplicateQuestions(exerciseData.items)) {
+      const error = 'Duplicate or near-duplicate questions detected in batch';
+      clientErrors.push(error);
+      console.error('❌ Duplicate questions:', exerciseData.items.map((item, i) => ({
+        index: i,
+        question: item.question,
+        normalized: normalizeQuestion(item.question)
+      })));
+    }
+    
+    // If client-side validation fails, log and regenerate once
+    if (clientErrors.length > 0) {
+      console.warn('❌ Client-side validation failed:', clientErrors);
+      console.log('📝 Full exercise data:', JSON.stringify(exerciseData, null, 2));
+      status.textContent = 'Regenerating (quality check failed)';
+      
+      exerciseData = await callOpenAI(apiKey, buildPrompt(topic), {
+        model: 'gpt-4o-mini',
+        temperature: 0.35,
+        schema: EXERCISE_SCHEMA,
+        schemaName: 'exercise_generation'
+      });
+      
+      console.log('✅ Regenerated, checking again...');
+    } else {
+      console.log('✅ Client-side validation passed');
+    }
+    
+    // Validate exercises with OpenAI validator
     status.textContent = 'Validating';
     const validation = await validateExercises(exerciseData, apiKey);
     
