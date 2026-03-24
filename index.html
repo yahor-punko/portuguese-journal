@@ -416,21 +416,116 @@ let currentExercise = null;
 let currentAnswers = {};
 let graded = false;
 
-const DEFAULT_PROMPT = `You are a European Portuguese (Portugal) language exercise generator for an English-speaking learner at level A1/A2.
+// ══════════════════════════════════════════════════════
+// JSON SCHEMAS
+// ══════════════════════════════════════════════════════
+const EXERCISE_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["instructions", "items"],
+  properties: {
+    instructions: { type: "string" },
+    items: {
+      type: "array",
+      minItems: 5,
+      maxItems: 7,
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["type", "question", "canonical_answer", "accepted_variants", "grammar_category", "explanation"],
+        properties: {
+          type: {
+            type: "string",
+            enum: ["fill", "translate", "choice", "correct", "transform"]
+          },
+          question: { type: "string" },
+          canonical_answer: { type: "string" },
+          accepted_variants: {
+            type: "array",
+            items: { type: "string" }
+          },
+          options: {
+            type: "array",
+            items: { type: "string" },
+            minItems: 4,
+            maxItems: 4
+          },
+          grammar_category: { type: "string" },
+          explanation: { type: "string" }
+        },
+        allOf: [
+          {
+            if: {
+              properties: { type: { const: "choice" } },
+              required: ["type"]
+            },
+            then: {
+              required: ["options"]
+            }
+          }
+        ]
+      }
+    }
+  }
+};
 
-RULES:
-- Always use European Portuguese, never Brazilian (autocarro not ônibus, casa de banho not banheiro, frigorífico not geladeira, etc.)
-- ALWAYS generate NEW, UNIQUE exercises — never repeat questions from previous sessions. Vary sentence subjects, contexts and vocabulary every time.
-- Generate 5–7 exercises per session
-- Mix exercise types: fill-in-the-blank, sentence transformation, translation from English, multiple choice, error correction
-- ALL text (instructions, questions, explanations) must be in English only — no other languages
-- Return ONLY valid JSON, no markdown, no preamble
-- Each item must have: "question" (English), "answer" (correct Portuguese), "type" (fill|transform|translate|choice|correct), "grammar_category" (e.g. "Verb SER", "Articles", "Adjective agreement")
-- For "choice" type add "options": ["a","b","c","d"]
-- "instructions" field: one sentence in English
+// ══════════════════════════════════════════════════════
+// PROMPTS
+// ══════════════════════════════════════════════════════
+const DEFAULT_PROMPT = `You are a European Portuguese (Portugal) language exercise generator for an English-speaking learner (A1/A2 level).
+Task: Generate high-quality, unambiguous exercises.
 
-JSON format:
-{"instructions":"...","items":[{"type":"fill","question":"Fill in: Eu ___ estudante. (to be)","answer":"sou","grammar_category":"Verb SER"},{"type":"translate","question":"She is a teacher.","answer":"Ela é professora.","grammar_category":"Verb SER"}]}`;
+Return ONLY valid JSON:
+{
+  "instructions": "...",
+  "items": [
+    {
+      "type": "fill|translate|choice|correct|transform",
+      "question": "...",
+      "canonical_answer": "...",
+      "accepted_variants": ["...", "..."],
+      "options": ["...", "..."], 
+      "grammar_category": "...",
+      "explanation": "short explanation"
+    }
+  ]
+}
+
+STRICT RULES:
+
+GENERAL:
+- Use ONLY European Portuguese (Portugal)
+- All instructions/questions in English
+- Generate 5–7 exercises
+- Prefer correctness over creativity
+- Avoid ambiguity at all costs
+
+ANSWERS:
+- Each exercise MUST have exactly ONE canonical_answer
+- If multiple valid answers exist → include them in accepted_variants
+- Do NOT include canonical_answer again inside accepted_variants
+- Do NOT generate exercises where correctness depends on hidden context
+
+QUALITY:
+- Portuguese must sound natural to a native speaker from Portugal
+- Grammar must be 100% correct
+- explanation MUST match the canonical_answer
+
+VARIETY:
+- Vary subjects (eu, tu, ele, nós, vocês, etc.)
+- Vary contexts (daily life, work, travel, etc.)
+- Do NOT repeat structure from recent exercises
+
+CHOICE TYPE:
+- Only ONE correct option
+- canonical_answer must exactly match one item from options
+- All other options must be clearly wrong
+
+IMPORTANT:
+- If an exercise is ambiguous → DO NOT generate it
+- If unsure → generate a simpler exercise
+
+Return ONLY JSON.`;
 
 // ══════════════════════════════════════════════════════
 // INIT
@@ -1061,10 +1156,6 @@ function buildPrompt(topic) {
   const globalPrompt = document.getElementById('global-prompt-input').value || DEFAULT_PROMPT;
   const vocab = (topic.vocab || []).map(v => `${v.pt} = ${v.en||v.ru||''}`).join(', ');
   const openErrors = (topic.errors || []).filter(e => !e.fixed);
-  const recentExs = (topic.exercises || []).slice(-5);
-  const recentPerf = recentExs.length ? `Recent sessions: ${recentExs.map(e => e.error_count + ' errors').join(', ')}` : '';
-  const sessionSeed = Date.now();
-  const randomSeed = Math.floor(Math.random() * 10000);
   
   // Get last generated exercises from localStorage to avoid repetition
   const historyKey = `exercise_history_${currentTopicId}`;
@@ -1072,48 +1163,157 @@ function buildPrompt(topic) {
   const lastExercises = history.slice(-10).map(ex => ex.question).join('; ');
 
   let prompt = globalPrompt + '\n\n';
-  prompt += `TOPIC: ${topic.unit ? topic.unit + ' — ' : ''}${topic.name}\n\n`;
-  if (topic.custom_prompt) prompt += `TOPIC INSTRUCTIONS:\n${topic.custom_prompt}\n\n`;
-  if (vocab) prompt += `KNOWN VOCABULARY (use these words in exercises):\n${vocab}\n\n`;
+  prompt += `TOPIC:\n${topic.unit ? topic.unit + ' — ' : ''}${topic.name}\n`;
+  if (topic.custom_prompt) prompt += `${topic.custom_prompt}\n`;
+  prompt += '\n';
   
-  // Show recent exercises to AVOID repetition
-  if (lastExercises) {
-    prompt += `RECENTLY USED EXERCISES (DO NOT REPEAT THESE):
-${lastExercises}
-
-`;
+  if (vocab) {
+    prompt += `KNOWN VOCABULARY:\n${vocab}\n\n`;
   }
   
-  // CRITICAL: If there are errors, 2-3 exercises MUST focus on them
+  if (lastExercises) {
+    prompt += `RECENT EXERCISES (DO NOT REPEAT):\n${lastExercises}\n\n`;
+  }
+  
   if (openErrors.length > 0) {
     const errorSample = openErrors.slice(0, 3).map(e => e.text).join('; ');
-    prompt += `CRITICAL INSTRUCTION - ERROR REINFORCEMENT:
-- Generate 5-7 exercises total
-- First 2-3 exercises: Create exercises that directly address these student errors:
-  ${errorSample}
-- Remaining exercises: Generate NEW exercises on other aspects of this topic
-- Make error-based exercises similar but not identical to the original mistakes
-
-`;
+    prompt += `STUDENT ERRORS TO REINFORCE:\n${errorSample}\n`;
+    prompt += `- First 2-3 exercises should address these errors\n`;
+    prompt += `- Remaining exercises cover other aspects of the topic\n\n`;
   }
   
-  if (recentPerf) prompt += `${recentPerf}\n\n`;
-  
-  prompt += `UNIQUENESS REQUIREMENT:
-- SESSION ID: ${sessionSeed}
-- RANDOM SEED: ${randomSeed}
-- You MUST generate completely NEW exercises different from the "RECENTLY USED" list above
-- Use DIFFERENT sentence subjects (vary between: eu, tu, ele, ela, nós, vocês, eles, elas)
-- Use DIFFERENT contexts and scenarios (family, work, hobbies, travel, daily life, etc.)
-- Use DIFFERENT vocabulary (vary nouns, adjectives, places, actions, time expressions)
-- Use DIFFERENT sentence structures and patterns
-- NEVER repeat the same question type or format twice in a row
-- Maximum variety and creativity required
-
-`;
-  
-  prompt += 'All text in English only. Return ONLY valid JSON.';
   return prompt;
+}
+
+async function validateExercises(exerciseJSON, apiKey) {
+  const validatorPrompt = `You are a strict quality validator for a European Portuguese learning app.
+Task: Validate generated exercises BEFORE showing them to the user.
+
+Check the following:
+1. Does each exercise have exactly ONE correct answer?
+2. Are accepted_variants truly correct alternatives?
+3. Is the Portuguese natural and correct for Portugal?
+4. Does the question match the answer?
+5. Is there any ambiguity or multiple valid interpretations?
+6. Are multiple choice options valid (only one correct)?
+7. Does explanation match the answer?
+8. Is grammar_category correct?
+9. Is the level appropriate for A1/A2?
+
+Return structured JSON with issues categorized by severity and type.
+
+CRITICAL:
+- Reject exercises with ambiguity (AMBIGUOUS)
+- Reject exercises with more than one correct answer (MULTIPLE_CORRECT_ANSWERS)
+- Reject unnatural Portuguese (UNNATURAL_PT_PT)
+- Reject mismatched explanation (EXPLANATION_MISMATCH)
+- Reject grammar errors (GRAMMAR_ERROR)
+- Reject wrong grammar category (WRONG_GRAMMAR_CATEGORY)
+- Reject if too difficult (LEVEL_MISMATCH)
+
+Input:
+${JSON.stringify(exerciseJSON, null, 2)}`;
+
+  try {
+    const res = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+      body: JSON.stringify({ 
+        model: 'gpt-5.4-mini', 
+        temperature: 0, 
+        messages: [{ role: 'user', content: validatorPrompt }],
+        response_format: {
+          type: "json_schema",
+          json_schema: {
+            name: "validation_result",
+            strict: true,
+            schema: {
+              type: "object",
+              additionalProperties: false,
+              required: ["valid", "issues", "fixed_items"],
+              properties: {
+                valid: { type: "boolean" },
+                issues: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    additionalProperties: false,
+                    required: ["index", "code", "message", "severity"],
+                    properties: {
+                      index: { type: "integer", minimum: 0 },
+                      code: {
+                        type: "string",
+                        enum: ["AMBIGUOUS", "MULTIPLE_CORRECT_ANSWERS", "UNNATURAL_PT_PT", "GRAMMAR_ERROR", "QUESTION_ANSWER_MISMATCH", "EXPLANATION_MISMATCH", "INVALID_OPTIONS", "WRONG_GRAMMAR_CATEGORY", "LEVEL_MISMATCH"]
+                      },
+                      message: { type: "string" },
+                      severity: {
+                        type: "string",
+                        enum: ["warning", "error"]
+                      }
+                    }
+                  }
+                },
+                fixed_items: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    additionalProperties: false,
+                    required: ["index", "item"],
+                    properties: {
+                      index: { type: "integer", minimum: 0 },
+                      item: {
+                        type: "object",
+                        additionalProperties: false,
+                        required: ["type", "question", "canonical_answer", "accepted_variants", "grammar_category", "explanation"],
+                        properties: {
+                          type: {
+                            type: "string",
+                            enum: ["fill", "translate", "choice", "correct", "transform"]
+                          },
+                          question: { type: "string" },
+                          canonical_answer: { type: "string" },
+                          accepted_variants: {
+                            type: "array",
+                            items: { type: "string" }
+                          },
+                          options: {
+                            type: "array",
+                            items: { type: "string" },
+                            minItems: 4,
+                            maxItems: 4
+                          },
+                          grammar_category: { type: "string" },
+                          explanation: { type: "string" }
+                        },
+                        allOf: [
+                          {
+                            if: {
+                              properties: { type: { const: "choice" } },
+                              required: ["type"]
+                            },
+                            then: {
+                              required: ["options"]
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      })
+    });
+    const data = await res.json();
+    if (!res.ok) return { valid: true, issues: [], fixed_items: [] }; // Fallback
+    const raw = data.choices[0].message.content.trim();
+    return JSON.parse(raw);
+  } catch (e) {
+    console.error('Validator error:', e);
+    return { valid: true, issues: [], fixed_items: [] }; // Fallback
+  }
 }
 
 // Generate only topic overview without exercises
@@ -1129,52 +1329,134 @@ async function generateTopicOverview() {
   status.textContent = 'Generating topic overview'; 
   status.classList.add('loading');
   
-  const explainPrompt = `You are a European Portuguese (Portugal) language tutor. The student is starting a new topic.
-Topic: ${topic.unit ? topic.unit + ' — ' : ''}${topic.name}
-${topic.custom_prompt ? 'Focus: ' + topic.custom_prompt : ''}
+  const explainPrompt = `You are a European Portuguese (Portugal) language tutor for an English-speaking learner.
+Task: Explain a grammar topic clearly and accurately.
 
-Provide a structured topic explanation in English. Return ONLY valid JSON with this format:
+Topic: ${topic.unit ? topic.unit + ' — ' : ''}${topic.name}
+${topic.custom_prompt ? topic.custom_prompt : ''}
+
+Return ONLY valid JSON with this structure:
 {
-  "summary": "2-3 sentence overview of what this topic covers",
+  "summary": "2-3 sentence explanation",
   "key_rules": ["rule 1", "rule 2", "rule 3"],
   "examples": [
-    {"pt": "Eu sou estudante.", "en": "I am a student."},
-    {"pt": "Ela é professora.", "en": "She is a teacher."}
+    {"pt": "...", "en": "..."}
   ],
   "artifacts": {
     "verbs": [
       {
-        "infinitive": "ser",
-        "translation": "to be",
-        "tense": "Present",
+        "infinitive": "...",
+        "translation": "...",
+        "tense": "...",
         "conjugations": [
-          {"pronoun": "eu", "form": "sou"},
-          {"pronoun": "tu", "form": "és"},
-          {"pronoun": "ele/ela/você", "form": "é"},
-          {"pronoun": "nós", "form": "somos"},
-          {"pronoun": "vós", "form": "sois"},
-          {"pronoun": "eles/elas/vocês", "form": "são"}
+          {"pronoun": "eu", "form": "..."},
+          {"pronoun": "tu", "form": "..."},
+          {"pronoun": "ele/ela/você", "form": "..."},
+          {"pronoun": "nós", "form": "..."},
+          {"pronoun": "vós", "form": "..."},
+          {"pronoun": "eles/elas/vocês", "form": "..."}
         ]
       }
-    ],
-    "possessives": ["meu/minha (my)", "teu/tua (your)", "seu/sua (his/her/your formal)"],
-    "articles": ["o/a (the)", "um/uma (a/an)"],
-    "pronouns": ["eu (I)", "tu (you)", "ele/ela (he/she)"]
+    ]
   }
 }
 
-IMPORTANT RULES:
-- For VERBS: always provide full conjugation table with all 6 persons (eu, tu, ele/ela/você, nós, vós, eles/elas/vocês)
-- Specify the tense (Present, Pretérito Perfeito, Imperativo, etc.)
-- For other artifact categories (possessives, articles, pronouns, prepositions, adjectives, adverbs, conjunctions): use simple "Portuguese (English)" format
-- Include ONLY artifact categories relevant to this topic
-- If multiple verbs are covered, include all of them with conjugations`;
+Rules:
+- Use ONLY European Portuguese (Portugal)
+- Be factually correct and simple (A1/A2 level)
+- Include ONLY relevant artifact categories
+- Prefer correctness over completeness
+- No ambiguity or alternative interpretations
+- No markdown, no explanations outside JSON`;
 
   try {
     const res = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-      body: JSON.stringify({ model: 'gpt-4o', temperature: 0.5, messages: [{ role: 'user', content: explainPrompt }] })
+      body: JSON.stringify({ 
+        model: 'gpt-5.4-mini', 
+        temperature: 0.2, 
+        messages: [{ role: 'user', content: explainPrompt }],
+        response_format: {
+          type: "json_schema",
+          json_schema: {
+            name: "topic_overview",
+            strict: true,
+            schema: {
+              type: "object",
+              additionalProperties: false,
+              required: ["summary", "key_rules", "examples", "artifacts"],
+              properties: {
+                summary: { type: "string" },
+                key_rules: {
+                  type: "array",
+                  items: { type: "string" },
+                  minItems: 2,
+                  maxItems: 6
+                },
+                examples: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    additionalProperties: false,
+                    required: ["pt", "en"],
+                    properties: {
+                      pt: { type: "string" },
+                      en: { type: "string" }
+                    }
+                  },
+                  minItems: 2,
+                  maxItems: 6
+                },
+                artifacts: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    verbs: {
+                      type: "array",
+                      items: {
+                        type: "object",
+                        additionalProperties: false,
+                        required: ["infinitive", "translation", "tense", "conjugations"],
+                        properties: {
+                          infinitive: { type: "string" },
+                          translation: { type: "string" },
+                          tense: { type: "string" },
+                          conjugations: {
+                            type: "array",
+                            items: {
+                              type: "object",
+                              additionalProperties: false,
+                              required: ["pronoun", "form"],
+                              properties: {
+                                pronoun: {
+                                  type: "string",
+                                  enum: ["eu", "tu", "ele/ela/você", "nós", "vós", "eles/elas/vocês"]
+                                },
+                                form: { type: "string" }
+                              }
+                            },
+                            minItems: 6,
+                            maxItems: 6
+                          }
+                        }
+                      }
+                    },
+                    possessives: { type: "array", items: { type: "string" } },
+                    articles: { type: "array", items: { type: "string" } },
+                    pronouns: { type: "array", items: { type: "string" } },
+                    prepositions: { type: "array", items: { type: "string" } },
+                    adjectives: { type: "array", items: { type: "string" } },
+                    adverbs: { type: "array", items: { type: "string" } },
+                    conjunctions: { type: "array", items: { type: "string" } }
+                  },
+                  required: []
+                }
+              }
+            }
+          }
+        }
+      })
     });
     const data = await res.json();
     
@@ -1302,52 +1584,134 @@ async function explainThenGenerate() {
     status.textContent = 'Loading topic explanation'; 
     status.classList.add('loading');
 
-    const explainPrompt = `You are a European Portuguese (Portugal) language tutor. The student is starting a new topic.
-Topic: ${topic.unit ? topic.unit + ' — ' : ''}${topic.name}
-${topic.custom_prompt ? 'Focus: ' + topic.custom_prompt : ''}
+    const explainPrompt = `You are a European Portuguese (Portugal) language tutor for an English-speaking learner.
+Task: Explain a grammar topic clearly and accurately.
 
-Provide a structured topic explanation in English. Return ONLY valid JSON with this format:
+Topic: ${topic.unit ? topic.unit + ' — ' : ''}${topic.name}
+${topic.custom_prompt ? topic.custom_prompt : ''}
+
+Return ONLY valid JSON with this structure:
 {
-  "summary": "2-3 sentence overview of what this topic covers",
+  "summary": "2-3 sentence explanation",
   "key_rules": ["rule 1", "rule 2", "rule 3"],
   "examples": [
-    {"pt": "Eu sou estudante.", "en": "I am a student."},
-    {"pt": "Ela é professora.", "en": "She is a teacher."}
+    {"pt": "...", "en": "..."}
   ],
   "artifacts": {
     "verbs": [
       {
-        "infinitive": "ser",
-        "translation": "to be",
-        "tense": "Present",
+        "infinitive": "...",
+        "translation": "...",
+        "tense": "...",
         "conjugations": [
-          {"pronoun": "eu", "form": "sou"},
-          {"pronoun": "tu", "form": "és"},
-          {"pronoun": "ele/ela/você", "form": "é"},
-          {"pronoun": "nós", "form": "somos"},
-          {"pronoun": "vós", "form": "sois"},
-          {"pronoun": "eles/elas/vocês", "form": "são"}
+          {"pronoun": "eu", "form": "..."},
+          {"pronoun": "tu", "form": "..."},
+          {"pronoun": "ele/ela/você", "form": "..."},
+          {"pronoun": "nós", "form": "..."},
+          {"pronoun": "vós", "form": "..."},
+          {"pronoun": "eles/elas/vocês", "form": "..."}
         ]
       }
-    ],
-    "possessives": ["meu/minha (my)", "teu/tua (your)", "seu/sua (his/her/your formal)"],
-    "articles": ["o/a (the)", "um/uma (a/an)"],
-    "pronouns": ["eu (I)", "tu (you)", "ele/ela (he/she)"]
+    ]
   }
 }
 
-IMPORTANT RULES:
-- For VERBS: always provide full conjugation table with all 6 persons (eu, tu, ele/ela/você, nós, vós, eles/elas/vocês)
-- Specify the tense (Present, Pretérito Perfeito, Imperativo, etc.)
-- For other artifact categories (possessives, articles, pronouns, prepositions, adjectives, adverbs, conjunctions): use simple "Portuguese (English)" format
-- Include ONLY artifact categories relevant to this topic
-- If multiple verbs are covered, include all of them with conjugations`;
+Rules:
+- Use ONLY European Portuguese (Portugal)
+- Be factually correct and simple (A1/A2 level)
+- Include ONLY relevant artifact categories
+- Prefer correctness over completeness
+- No ambiguity or alternative interpretations
+- No markdown, no explanations outside JSON`;
 
     try {
       const res = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-        body: JSON.stringify({ model: 'gpt-4o', temperature: 0.5, messages: [{ role: 'user', content: explainPrompt }] })
+        body: JSON.stringify({ 
+          model: 'gpt-5.4-mini', 
+          temperature: 0.2, 
+          messages: [{ role: 'user', content: explainPrompt }],
+          response_format: {
+            type: "json_schema",
+            json_schema: {
+              name: "topic_overview",
+              strict: true,
+              schema: {
+                type: "object",
+                additionalProperties: false,
+                required: ["summary", "key_rules", "examples", "artifacts"],
+                properties: {
+                  summary: { type: "string" },
+                  key_rules: {
+                    type: "array",
+                    items: { type: "string" },
+                    minItems: 2,
+                    maxItems: 6
+                  },
+                  examples: {
+                    type: "array",
+                    items: {
+                      type: "object",
+                      additionalProperties: false,
+                      required: ["pt", "en"],
+                      properties: {
+                        pt: { type: "string" },
+                        en: { type: "string" }
+                      }
+                    },
+                    minItems: 2,
+                    maxItems: 6
+                  },
+                  artifacts: {
+                    type: "object",
+                    additionalProperties: false,
+                    properties: {
+                      verbs: {
+                        type: "array",
+                        items: {
+                          type: "object",
+                          additionalProperties: false,
+                          required: ["infinitive", "translation", "tense", "conjugations"],
+                          properties: {
+                            infinitive: { type: "string" },
+                            translation: { type: "string" },
+                            tense: { type: "string" },
+                            conjugations: {
+                              type: "array",
+                              items: {
+                                type: "object",
+                                additionalProperties: false,
+                                required: ["pronoun", "form"],
+                                properties: {
+                                  pronoun: {
+                                    type: "string",
+                                    enum: ["eu", "tu", "ele/ela/você", "nós", "vós", "eles/elas/vocês"]
+                                  },
+                                  form: { type: "string" }
+                                }
+                              },
+                              minItems: 6,
+                              maxItems: 6
+                            }
+                          }
+                        }
+                      },
+                      possessives: { type: "array", items: { type: "string" } },
+                      articles: { type: "array", items: { type: "string" } },
+                      pronouns: { type: "array", items: { type: "string" } },
+                      prepositions: { type: "array", items: { type: "string" } },
+                      adjectives: { type: "array", items: { type: "string" } },
+                      adverbs: { type: "array", items: { type: "string" } },
+                      conjunctions: { type: "array", items: { type: "string" } }
+                    },
+                    required: []
+                  }
+                }
+              }
+            }
+          }
+        })
       });
       const data = await res.json();
       if (res.ok) {
@@ -1468,12 +1832,66 @@ async function generateExercise() {
     const res = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-      body: JSON.stringify({ model: 'gpt-4o', temperature: 1.0, messages: [{ role: 'user', content: buildPrompt(topic) }] })
+      body: JSON.stringify({ 
+        model: 'gpt-5.4-mini', 
+        temperature: 0.35, 
+        messages: [{ role: 'user', content: buildPrompt(topic) }],
+        response_format: {
+          type: "json_schema",
+          json_schema: {
+            name: "exercise_generation",
+            strict: true,
+            schema: EXERCISE_SCHEMA
+          }
+        }
+      })
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error?.message || `HTTP ${res.status}`);
     const raw = data.choices[0].message.content.trim().replace(/^```json\s*/,'').replace(/```\s*$/,'').trim();
-    currentExercise = JSON.parse(raw);
+    let exerciseData = JSON.parse(raw);
+    
+    // Validate exercises
+    status.textContent = 'Validating';
+    const validation = await validateExercises(exerciseData, apiKey);
+    
+    if (!validation.valid && validation.fixed_items && validation.fixed_items.length > 0) {
+      // Use fixed items if validator provided corrections
+      console.log('Validator fixed issues:', validation.issues);
+      // Apply fixes: fixed_items contains {index, item}
+      validation.fixed_items.forEach(fix => {
+        if (fix.index >= 0 && fix.index < exerciseData.items.length) {
+          exerciseData.items[fix.index] = fix.item;
+        }
+      });
+    } else if (!validation.valid) {
+      // If invalid and no fixes, regenerate (max 1 retry)
+      console.warn('Validation failed, regenerating:', validation.issues);
+      status.textContent = 'Regenerating';
+      
+      const retryRes = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+        body: JSON.stringify({ 
+          model: 'gpt-5.4-mini', 
+          temperature: 0.35, 
+          messages: [{ role: 'user', content: buildPrompt(topic) }],
+          response_format: {
+            type: "json_schema",
+            json_schema: {
+              name: "exercise_generation",
+              strict: true,
+              schema: EXERCISE_SCHEMA
+            }
+          }
+        })
+      });
+      const retryData = await retryRes.json();
+      const retryRaw = retryData.choices[0].message.content.trim().replace(/^```json\s*/,'').replace(/```\s*$/,'').trim();
+      exerciseData = JSON.parse(retryRaw);
+    }
+    
+    currentExercise = exerciseData;
     
     // Save to exercise history to avoid repetition
     if (currentExercise && currentExercise.items) {
@@ -1545,7 +1963,12 @@ async function submitExercise() {
   if (!apiKey) { toast('No API key — go to Settings'); return; }
   
   const items = currentExercise.items || [];
-  const answers = items.map((item, i) => ({ question: item.question, expected: item.answer, given: (currentAnswers[i]||'').trim() }));
+  const answers = items.map((item, i) => ({ 
+    question: item.question, 
+    canonical: item.canonical_answer || item.answer, // Fallback to old format
+    variants: item.accepted_variants || [],
+    given: (currentAnswers[i]||'').trim()
+  }));
   
   // Disable inputs and button during grading
   items.forEach((_, i) => { const inp = document.getElementById('ex-inp-'+i); if (inp) inp.disabled = true; });
@@ -1565,44 +1988,54 @@ async function submitExercise() {
   
   const normalizedAnswers = answers.map(a => ({
     question: a.question,
-    expected_raw: a.expected,
+    canonical_raw: a.canonical,
+    canonical_normalized: normalizeText(a.canonical),
+    accepted_variants_normalized: a.variants.map(v => normalizeText(v)),
     given_raw: a.given,
-    expected_normalized: normalizeText(a.expected),
     given_normalized: normalizeText(a.given)
   }));
   
   const gradingPrompt = `You are grading a European Portuguese language exercise for an English-speaking learner.
 
-CRITICAL: Compare ONLY the normalized versions (expected_normalized vs given_normalized). These versions have punctuation and extra whitespace removed.
+CRITICAL: Compare the normalized version of the student's answer (given_normalized) against:
+1. canonical_normalized (the main correct answer)
+2. accepted_variants_normalized (alternative correct answers)
+
+If given_normalized matches ANY of these → mark as CORRECT.
 
 GRADING RULES:
-1. If normalized versions match EXACTLY → mark as CORRECT (even if raw versions differ in punctuation)
-2. Check for missing/wrong accents: é vs e, ã vs a, ç vs c, ó vs o, etc.
-3. Check for incorrect verb forms, articles, gender agreement, word order
-4. DO NOT mention punctuation or capitalization in explanations — these are already normalized
+1. If given_normalized matches canonical_normalized OR any variant → CORRECT
+2. Punctuation and capitalization are already normalized — ignore them
+3. Check for missing/wrong accents: é vs e, ã vs a, ç vs c, ó vs o, etc.
+4. Check for incorrect verb forms, articles, gender agreement, word order
+5. DO NOT mention punctuation or capitalization in explanations
+
+MATCH TYPES:
+- exact: Matches canonical_normalized exactly
+- accepted_variant: Matches one of accepted_variants_normalized
+- minor_accent_error: Wrong accent but otherwise correct
+- grammar_error: Wrong verb form, article, gender, etc.
+- word_choice_error: Wrong word entirely
+- other: Other types of errors
+
+SHOULD STORE AS ERROR:
+- true: Store this mistake for future reinforcement (grammar errors, word choice)
+- false: Don't store (minor accent errors that user likely knows)
 
 For CORRECT answers:
 - Set "correct": true
+- Set "match_type": "exact" or "accepted_variant"
 - Leave "explanation": null
+- Set "should_store_as_error": false
 
 For WRONG answers:
 - Set "correct": false  
+- Set appropriate "match_type"
 - Provide specific explanation (what grammar rule was violated)
-- DO NOT say "missing punctuation" or "capitalization" — focus on grammar/accents/words
+- Set "should_store_as_error": true for significant errors, false for minor accent mistakes
+- Show the canonical answer as reference
 
-Return ONLY valid JSON:
-{
-  "results": [
-    {
-      "correct": true,
-      "explanation": null,
-      "grammar_category": null,
-      "vocab": [
-        {"pt": "estudante", "en": "student"}
-      ]
-    }
-  ]
-}
+Return structured JSON with match_type and should_store_as_error for each result.
 
 Items to grade:
 ${JSON.stringify(normalizedAnswers, null, 2)}`;
@@ -1612,18 +2045,81 @@ ${JSON.stringify(normalizedAnswers, null, 2)}`;
     const res = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-      body: JSON.stringify({ model: 'gpt-4o', temperature: 0, messages: [{ role: 'user', content: gradingPrompt }] })
+      body: JSON.stringify({ 
+        model: 'gpt-5.4-mini', 
+        temperature: 0, 
+        messages: [{ role: 'user', content: gradingPrompt }],
+        response_format: {
+          type: "json_schema",
+          json_schema: {
+            name: "grading_result",
+            strict: true,
+            schema: {
+              type: "object",
+              additionalProperties: false,
+              required: ["results"],
+              properties: {
+                results: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    additionalProperties: false,
+                    required: ["correct", "match_type", "explanation", "grammar_category", "should_store_as_error", "vocab"],
+                    properties: {
+                      correct: { type: "boolean" },
+                      match_type: {
+                        type: "string",
+                        enum: ["exact", "accepted_variant", "minor_accent_error", "grammar_error", "word_choice_error", "other"]
+                      },
+                      explanation: {
+                        type: ["string", "null"]
+                      },
+                      grammar_category: {
+                        type: ["string", "null"]
+                      },
+                      should_store_as_error: {
+                        type: "boolean"
+                      },
+                      vocab: {
+                        type: "array",
+                        items: {
+                          type: "object",
+                          additionalProperties: false,
+                          required: ["pt", "en"],
+                          properties: {
+                            pt: { type: "string" },
+                            en: { type: "string" }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      })
     });
     const data = await res.json();
-    const raw = data.choices[0].message.content.trim().replace(/^```json\s*/,'').replace(/```\s*$/,'').trim();
+    const raw = data.choices[0].message.content.trim();
     results = JSON.parse(raw).results;
   } catch {
-    // Fallback: compare normalized versions
+    // Fallback: compare normalized versions with canonical and variants
     results = answers.map(a => {
       const givenNorm = normalizeText(a.given);
-      const expectedNorm = normalizeText(a.expected);
+      const canonicalNorm = normalizeText(a.canonical);
+      const variantsNorm = a.variants.map(v => normalizeText(v));
+      
+      const isCorrect = givenNorm === canonicalNorm || variantsNorm.includes(givenNorm);
+      const matchType = isCorrect ? (givenNorm === canonicalNorm ? "exact" : "accepted_variant") : "other";
+      
       return { 
-        correct: givenNorm === expectedNorm,
+        correct: isCorrect,
+        match_type: matchType,
+        explanation: null,
+        grammar_category: null,
+        should_store_as_error: !isCorrect, // Store if incorrect
         vocab: []
       };
     });
@@ -1648,16 +2144,29 @@ async function processGrading(results, answers) {
     const inp = document.getElementById('ex-inp-'+i);
     if (r.correct) {
       if (inp) inp.classList.add('correct');
-      if (fb) fb.innerHTML = `<span class="ex-feedback ok">✓ Correct</span>`;
+      // Show match type for correct answers
+      const matchInfo = r.match_type === 'accepted_variant' ? ' (alternative)' : '';
+      if (fb) fb.innerHTML = `<span class="ex-feedback ok">✓ Correct${matchInfo}</span>`;
     } else {
       errorCount++;
       if (inp) inp.classList.add('wrong');
       const given = answers[i].given || '(no answer)';
-      const correct = answers[i].expected;
+      const correct = answers[i].canonical; // Use canonical answer
       if (fb) fb.innerHTML = `<span class="ex-feedback err">✗ ${given}</span>
         <div class="ex-correct">→ ${correct}</div>
         ${r.explanation ? `<div class="ex-explanation">${r.explanation}</div>` : ''}`;
-      newErrors.push({ topic_id: currentTopicId, user_id: currentUser.id, text: `${given} → should be: ${correct} (Q: ${item.question})`, explanation: r.explanation||'', grammar_category: r.grammar_category || item.grammar_category || 'General', exercise_meta: topic.name });
+      
+      // Only store as error if should_store_as_error is true (skip minor accent errors)
+      if (r.should_store_as_error) {
+        newErrors.push({ 
+          topic_id: currentTopicId, 
+          user_id: currentUser.id, 
+          text: `${given} → should be: ${correct} (Q: ${item.question})`, 
+          explanation: r.explanation||'', 
+          grammar_category: r.grammar_category || item.grammar_category || 'General', 
+          exercise_meta: topic.name 
+        });
+      }
     }
     
     // Add vocab with English translations from grading results
@@ -1717,7 +2226,9 @@ async function processGrading(results, answers) {
     banner.innerHTML = `✓ Perfect — ${results.length}/${results.length} correct!${pct===100?' Topic complete! 🎉':''}`;
   } else {
     banner.className = 'result-banner fail';
-    banner.innerHTML = `${results.length-errorCount}/${results.length} correct · ${errorCount} error${errorCount>1?'s':''} saved. Practice again to improve.`;
+    const savedCount = newErrors.length; // Actual errors saved (excluding minor accent errors)
+    const savedText = savedCount > 0 ? ` · ${savedCount} error${savedCount>1?'s':''} saved for review` : '';
+    banner.innerHTML = `${results.length-errorCount}/${results.length} correct${savedText}. Practice again to improve.`;
   }
 
   // Replace "Check answers" button with "New exercise" button
