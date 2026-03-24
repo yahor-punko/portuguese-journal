@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Português — Learning Journal</title>
-<!-- VERSION: v7.3-FINAL (new proms) | Build: 2026-03-24 -->
+<!-- VERSION: v7.3-FINAL (5.4-model) | Build: 2026-03-24 -->
 <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;1,400&family=Geist+Mono:wght@300;400;500&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <style>
@@ -404,7 +404,7 @@ main{padding:2.5rem 3rem;max-width:760px;}
 const APP_VERSION = 'v7.3-FINAL';
 const BUILD_DATE = '2026-03-24';
 console.log(`%c🇵🇹 Portuguese Learning Journal ${APP_VERSION}`, 'font-weight: bold; font-size: 14px; color: #2a6b3f;');
-console.log(`Build: ${BUILD_DATE} | All Artifacts Required (new proms)`);
+console.log(`Build: ${BUILD_DATE} | All Artifacts Required (5.4-model)`);
 
 // ══════════════════════════════════════════════════════
 // CONFIG — replace with your Supabase project values
@@ -790,6 +790,8 @@ TRANSLATE TYPE:
 - The expected translation must have one clearly preferred A1/A2 answer
 - If another wording is also fully correct, include it in accepted_variants
 - options MUST be []
+- If more than one natural correct translation exists, include all clearly valid alternatives in accepted_variants
+- Do NOT generate translation items with multiple common answers unless those answers are included in accepted_variants
 
 CHOICE TYPE:
 - Only ONE correct option
@@ -1675,6 +1677,11 @@ TRANSLATE:
 - Must clearly state what to translate
 - Reject if ambiguous or multiple valid translations missing from accepted_variants
 - options MUST be []
+
+TRANSLATION STRICTNESS:
+- For translation items, explicitly check if multiple common, natural translations exist
+- If more than one widely used A1/A2 translation exists, ALL must be included in accepted_variants
+- If at least one common alternative is missing → reject (MULTIPLE_CORRECT_ANSWERS)
 
 CHOICE:
 - MUST have exactly 4 options
