@@ -1281,38 +1281,6 @@ async function loadAllData() {
       errors: (errorsData || []).filter(e => e.topic_id === t.id)
     }));
 
-    // Load global prompt with auto-migration
-    const PROMPT_VERSION = 2; // increment when you update DEFAULT_PROMPT
-    const { data: settingsData } = await sb.from('settings').select('*').eq('user_id', currentUser.id).single();
-    
-    let globalPrompt = settingsData?.global_prompt || DEFAULT_PROMPT;
-    const savedVersion = settingsData?.prompt_version || 0;
-    
-    // Auto-migrate to new default if user hasn't customized
-    if (savedVersion < PROMPT_VERSION && (!settingsData || !settingsData.custom_prompt_edited)) {
-      globalPrompt = DEFAULT_PROMPT;
-      
-      const settingsPayload = { 
-        user_id: currentUser.id, 
-        global_prompt: DEFAULT_PROMPT,
-        prompt_version: PROMPT_VERSION,
-        custom_prompt_edited: false
-      };
-      
-      console.log('📝 Upserting settings:', settingsPayload);
-      
-      const { data, error } = await sb.from('settings').upsert(settingsPayload);
-      
-      if (error) {
-        console.error('❌ Settings upsert error:', error);
-        console.error('Error details:', JSON.stringify(error, null, 2));
-      } else {
-        console.log('✅ Settings saved successfully');
-      }
-    }
-    
-    document.getElementById('global-prompt-input').value = globalPrompt;
-
     setSyncStatus('synced');
   } catch(e) {
     setSyncStatus('sync error');
@@ -1833,6 +1801,8 @@ async function saveUserApiKey() {
     .upsert({
       user_id: currentUser.id,
       user_api_key: val
+    }, {
+      onConflict: 'user_id'  // ← Settings имеет unique constraint на user_id
     });
   
   if (error) {
@@ -1927,6 +1897,8 @@ async function saveGlobalApiKey() {
       setting_value: val,
       updated_by: currentUser.id,
       updated_at: new Date().toISOString()
+    }, {
+      onConflict: 'setting_key'  // ← Указываем какой constraint использовать
     });
   
   if (error) {
@@ -1965,6 +1937,8 @@ async function savePrompt(promptType) {
       version: version,
       updated_by: currentUser.id,
       updated_at: new Date().toISOString()
+    }, {
+      onConflict: 'prompt_type'  // ← Указываем какой constraint использовать для UPDATE
     });
   
   if (error) {
