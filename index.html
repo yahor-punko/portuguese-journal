@@ -818,11 +818,15 @@ async function getActiveApiKey() {
   if (!currentUser) return null;
   
   // Check for user's personal key
-  const { data: userSettings } = await sb
+  const { data: userSettings, error: userError } = await sb
     .from('settings')
     .select('user_api_key')
     .eq('user_id', currentUser.id)
-    .single();
+    .maybeSingle();
+  
+  if (userError) {
+    console.error('❌ Error loading user settings:', userError);
+  }
   
   if (userSettings?.user_api_key) {
     console.log('Using user personal API key');
@@ -836,11 +840,15 @@ async function getActiveApiKey() {
   }
   
   // Load global key from DB if not cached
-  const { data: globalSettings } = await sb
+  const { data: globalSettings, error: globalError } = await sb
     .from('system_settings')
     .select('setting_value')
     .eq('setting_key', 'global_api_key')
-    .single();
+    .maybeSingle();
+  
+  if (globalError) {
+    console.error('❌ Error loading global API key:', globalError);
+  }
   
   globalApiKey = globalSettings?.setting_value || null;
   
@@ -1375,7 +1383,14 @@ async function loadCachedExplanation() {
   const area = document.getElementById('overview-area');
   
   // Check if explanation is cached
-  const { data: cached } = await sb.from('explanations').select('*').eq('topic_id', currentTopicId).eq('user_id', currentUser.id).single();
+  const { data: cached, error } = await sb.from('explanations').select('*').eq('topic_id', currentTopicId).eq('user_id', currentUser.id).maybeSingle();
+  
+  if (error) {
+    console.error('❌ Error loading cached explanation:', error);
+    // Show generate button if error or no cache
+    area.innerHTML = `<button class="btn" onclick="generateTopicOverview()">📖 Generate Topic Overview</button>`;
+    return;
+  }
   
   if (cached && cached.text) {
     try {
@@ -2393,7 +2408,11 @@ async function explainThenGenerate() {
   const status = document.getElementById('gen-status');
   
   // Check cache first
-  const { data: cached } = await sb.from('explanations').select('*').eq('topic_id', currentTopicId).eq('user_id', currentUser.id).single();
+  const { data: cached, error: cacheError } = await sb.from('explanations').select('*').eq('topic_id', currentTopicId).eq('user_id', currentUser.id).maybeSingle();
+  
+  if (cacheError) {
+    console.error('❌ Error loading cached explanation:', cacheError);
+  }
   
   if (cached && cached.text) {
     // Use cached explanation
