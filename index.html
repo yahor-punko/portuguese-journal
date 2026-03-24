@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Português — Learning Journal</title>
-<!-- VERSION: v7.6-FINAL (Choice Fix + Liberal Grading) | Build: 2026-03-24 -->
+<!-- VERSION: v8.0-ADMIN (Admin Panel + DB Prompts + API Key Management) | Build: 2026-03-24 -->
 <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;1,400&family=Geist+Mono:wght@300;400;500&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <style>
@@ -158,6 +158,14 @@ main{padding:2.5rem 3rem;max-width:760px;}
 .key-status.set{background:var(--green-bg);color:var(--green);}
 .key-status.unset{background:var(--red-bg);color:var(--red);}
 
+/* ── TABS ── */
+.tabs{display:flex;gap:2px;border-bottom:1px solid var(--line);margin-bottom:1.5rem;}
+.tab-btn{font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.05em;text-transform:uppercase;background:none;border:none;padding:10px 16px;cursor:pointer;color:var(--ink3);border-bottom:2px solid transparent;transition:all .2s;}
+.tab-btn:hover{color:var(--ink2);}
+.tab-btn.active{color:var(--ink);border-bottom-color:var(--ink);}
+.tab-panel{display:none;}
+.tab-panel.active{display:block;}
+
 /* ── MODAL ── */
 .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:100;display:none;align-items:center;justify-content:center;}
 .modal-overlay.open{display:flex;}
@@ -231,6 +239,7 @@ main{padding:2.5rem 3rem;max-width:760px;}
     <div style="display:flex;flex-direction:column;gap:2px;">
       <button class="foot-btn active" id="fn-home" onclick="showHome()">≡ All topics</button>
       <button class="foot-btn" id="fn-settings" onclick="showSettings()">⚙ Settings</button>
+      <button class="foot-btn" id="fn-admin" onclick="showAdmin()" style="display:none;">👑 Admin</button>
     </div>
   </div>
 </aside>
@@ -314,25 +323,149 @@ main{padding:2.5rem 3rem;max-width:760px;}
 
   <!-- SETTINGS -->
   <div id="view-settings" class="view">
-    <div class="view-head"><h1>Settings</h1><p>API key and global prompt</p></div>
+    <div class="view-head"><h1>Settings</h1><p>Personal preferences and API configuration</p></div>
+    
     <div class="settings-section">
-      <div class="settings-title">OpenAI API Key</div>
-      <div style="display:flex;gap:10px;align-items:flex-end;">
-        <div class="field" style="flex:1;margin:0;"><label>API Key</label><input type="password" id="api-key-input" placeholder="sk-..."></div>
-        <button class="btn" onclick="saveApiKey()">Save</button>
-      </div>
-      <div style="margin-top:.75rem;"><span class="key-status unset" id="key-status">Not set</span></div>
-      <p style="font-size:13px;color:var(--ink3);margin-top:.75rem;line-height:1.55;font-style:italic;">
-        Stored only in your browser's localStorage. Never sent anywhere except api.openai.com.
-      </p>
-    </div>
-    <div class="settings-section">
-      <div class="settings-title">Global Prompt</div>
+      <div class="settings-title">Personal API Key (Optional)</div>
       <p style="font-size:14px;color:var(--ink3);margin-bottom:1rem;font-style:italic;line-height:1.55;">
-        Included in every exercise generation request. Synced to your account.
+        Set your own OpenAI API key. If not set, the global key (configured by admin) will be used.
       </p>
-      <div class="field"><label>Global system prompt</label><textarea id="global-prompt-input" rows="10"></textarea></div>
-      <button class="btn" onclick="saveGlobalPrompt()">Save &amp; sync</button>
+      <div style="display:flex;gap:10px;align-items:flex-end;">
+        <div class="field" style="flex:1;margin:0;">
+          <label>Your API Key</label>
+          <input type="password" id="user-api-key" placeholder="sk-... (optional)">
+        </div>
+        <button class="btn" onclick="saveUserApiKey()">Save</button>
+        <button class="btn btn-ghost" onclick="removeUserApiKey()">Use Global</button>
+      </div>
+      <div style="margin-top:.75rem;">
+        <span class="key-status unset" id="user-key-status">Using global key</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ADMIN PANEL -->
+  <div id="view-admin" class="view">
+    <div class="view-head"><h1>👑 Admin Panel</h1><p>System configuration and prompt management</p></div>
+    
+    <div class="tabs">
+      <button class="tab-btn active" onclick="switchAdminTab('api', event.target)">API Settings</button>
+      <button class="tab-btn" onclick="switchAdminTab('prompts', event.target)">Prompts</button>
+    </div>
+    
+    <!-- API SETTINGS TAB -->
+    <div id="admin-tab-api" class="tab-panel active">
+      <div class="settings-section">
+        <div class="settings-title">Global API Key</div>
+        <p style="font-size:14px;color:var(--ink3);margin-bottom:1rem;">
+          This key is used by all users who haven't set their own personal key.
+        </p>
+        <div style="display:flex;gap:10px;align-items:flex-end;">
+          <div class="field" style="flex:1;margin:0;">
+            <label>OpenAI API Key</label>
+            <input type="password" id="admin-global-key" placeholder="sk-...">
+          </div>
+          <button class="btn" onclick="saveGlobalApiKey()">Save</button>
+        </div>
+        <div style="margin-top:.75rem;">
+          <span class="key-status" id="global-key-status">Not set</span>
+        </div>
+      </div>
+    </div>
+    
+    <!-- PROMPTS TAB -->
+    <div id="admin-tab-prompts" class="tab-panel">
+      <div class="settings-section">
+        <div class="settings-title">Exercise Generation Prompt</div>
+        <div class="field">
+          <label>Prompt Content</label>
+          <textarea id="admin-prompt-default" rows="12" placeholder="Prompt will be loaded from database..."></textarea>
+        </div>
+        <div style="display:flex;gap:10px;">
+          <div class="field" style="flex:1;">
+            <label>Model</label>
+            <select id="admin-prompt-default-model">
+              <option value="gpt-4o-mini">GPT-4o Mini</option>
+              <option value="gpt-5.4-mini">GPT-5.4 Mini</option>
+              <option value="gpt-4o">GPT-4o</option>
+            </select>
+          </div>
+          <div class="field" style="flex:1;">
+            <label>Temperature</label>
+            <input type="number" id="admin-prompt-default-temp" min="0" max="2" step="0.05" value="0.35">
+          </div>
+        </div>
+        <button class="btn" onclick="savePrompt('default')">Save Exercise Prompt</button>
+      </div>
+      
+      <div class="settings-section">
+        <div class="settings-title">Topic Overview Prompt</div>
+        <div class="field">
+          <label>Prompt Content</label>
+          <textarea id="admin-prompt-overview" rows="12" placeholder="Prompt will be loaded from database..."></textarea>
+        </div>
+        <div style="display:flex;gap:10px;">
+          <div class="field" style="flex:1;">
+            <label>Model</label>
+            <select id="admin-prompt-overview-model">
+              <option value="gpt-4o-mini">GPT-4o Mini</option>
+              <option value="gpt-5.4-mini">GPT-5.4 Mini</option>
+              <option value="gpt-4o">GPT-4o</option>
+            </select>
+          </div>
+          <div class="field" style="flex:1;">
+            <label>Temperature</label>
+            <input type="number" id="admin-prompt-overview-temp" min="0" max="2" step="0.05" value="0.2">
+          </div>
+        </div>
+        <button class="btn" onclick="savePrompt('topic_overview')">Save Overview Prompt</button>
+      </div>
+      
+      <div class="settings-section">
+        <div class="settings-title">Grading Prompt</div>
+        <div class="field">
+          <label>Prompt Content</label>
+          <textarea id="admin-prompt-grading" rows="12" placeholder="Prompt will be loaded from database..."></textarea>
+        </div>
+        <div style="display:flex;gap:10px;">
+          <div class="field" style="flex:1;">
+            <label>Model</label>
+            <select id="admin-prompt-grading-model">
+              <option value="gpt-4o-mini">GPT-4o Mini</option>
+              <option value="gpt-5.4-mini">GPT-5.4 Mini</option>
+              <option value="gpt-4o">GPT-4o</option>
+            </select>
+          </div>
+          <div class="field" style="flex:1;">
+            <label>Temperature</label>
+            <input type="number" id="admin-prompt-grading-temp" min="0" max="2" step="0.05" value="0">
+          </div>
+        </div>
+        <button class="btn" onclick="savePrompt('grading')">Save Grading Prompt</button>
+      </div>
+      
+      <div class="settings-section">
+        <div class="settings-title">Validator Prompt</div>
+        <div class="field">
+          <label>Prompt Content</label>
+          <textarea id="admin-prompt-validator" rows="12" placeholder="Prompt will be loaded from database..."></textarea>
+        </div>
+        <div style="display:flex;gap:10px;">
+          <div class="field" style="flex:1;">
+            <label>Model</label>
+            <select id="admin-prompt-validator-model">
+              <option value="gpt-4o-mini">GPT-4o Mini</option>
+              <option value="gpt-5.4-mini">GPT-5.4 Mini</option>
+              <option value="gpt-4o">GPT-4o</option>
+            </select>
+          </div>
+          <div class="field" style="flex:1;">
+            <label>Temperature</label>
+            <input type="number" id="admin-prompt-validator-temp" min="0" max="2" step="0.05" value="0">
+          </div>
+        </div>
+        <button class="btn" onclick="savePrompt('validator')">Save Validator Prompt</button>
+      </div>
     </div>
   </div>
 </main>
@@ -410,10 +543,10 @@ main{padding:2.5rem 3rem;max-width:760px;}
 // ══════════════════════════════════════════════════════
 // VERSION INFO
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v7.6-FINAL';
+const APP_VERSION = 'v8.0-ADMIN';
 const BUILD_DATE = '2026-03-24';
 console.log(`%c🇵🇹 Portuguese Learning Journal ${APP_VERSION}`, 'font-weight: bold; font-size: 14px; color: #2a6b3f;');
-console.log(`Build: ${BUILD_DATE} | Choice Fix + Liberal Grading`);
+console.log(`Build: ${BUILD_DATE} | Admin Panel + DB Prompts + API Key Management`);
 
 // ══════════════════════════════════════════════════════
 // CONFIG — replace with your Supabase project values
@@ -433,6 +566,9 @@ let currentTopicId = null;
 let currentExercise = null;
 let currentAnswers = {};
 let graded = false;
+let isAdmin = false;      // Admin status
+let systemPrompts = {};   // Loaded from DB
+let globalApiKey = null;  // Global API key (for all users)
 
 // ══════════════════════════════════════════════════════
 // JSON SCHEMAS
@@ -675,6 +811,49 @@ const GRADING_SCHEMA = {
 // API UTILITIES
 // ══════════════════════════════════════════════════════
 /**
+ * Get active API key (user key if set, otherwise global key)
+ * @returns {Promise<string|null>} - API key or null
+ */
+async function getActiveApiKey() {
+  if (!currentUser) return null;
+  
+  // Check for user's personal key
+  const { data: userSettings } = await sb
+    .from('settings')
+    .select('user_api_key')
+    .eq('user_id', currentUser.id)
+    .single();
+  
+  if (userSettings?.user_api_key) {
+    console.log('Using user personal API key');
+    return userSettings.user_api_key;
+  }
+  
+  // Fallback to global key
+  if (globalApiKey) {
+    console.log('Using global API key');
+    return globalApiKey;
+  }
+  
+  // Load global key from DB if not cached
+  const { data: globalSettings } = await sb
+    .from('system_settings')
+    .select('setting_value')
+    .eq('setting_key', 'global_api_key')
+    .single();
+  
+  globalApiKey = globalSettings?.setting_value || null;
+  
+  if (globalApiKey) {
+    console.log('Loaded and using global API key');
+  } else {
+    console.warn('No API key available (neither user nor global)');
+  }
+  
+  return globalApiKey;
+}
+
+/**
  * Universal OpenAI API caller with structured outputs
  * @param {string} apiKey - OpenAI API key
  * @param {string} prompt - Prompt text
@@ -869,83 +1048,33 @@ OUTPUT:
  * Build prompt for topic overview generation
  */
 function buildTopicOverviewPrompt(topic) {
-  return `You are a European Portuguese (Portugal) language tutor for an English-speaking learner.
-Task: Explain a grammar topic clearly and accurately.
-
-Topic: ${topic.unit ? topic.unit + ' — ' : ''}${topic.name}
-${topic.custom_prompt ? topic.custom_prompt : ''}
-
-Return ONLY valid JSON with this structure:
-{
-  "summary": "2-3 sentence explanation",
-  "key_rules": ["rule 1", "rule 2", "rule 3"],
-  "examples": [
-    {"pt": "...", "en": "..."}
-  ],
-  "artifacts": {
-    "verbs": [
-      {
-        "infinitive": "...",
-        "translation": "...",
-        "tense": "...",
-        "conjugations": [
-          {"pronoun": "eu", "form": "..."},
-          {"pronoun": "tu", "form": "..."},
-          {"pronoun": "ele/ela/você", "form": "..."},
-          {"pronoun": "nós", "form": "..."},
-          {"pronoun": "vós", "form": "..."},
-          {"pronoun": "eles/elas/vocês", "form": "..."}
-        ]
-      }
-    ],
-    "possessives": ["meu", "teu", "seu", ...],
-    "articles": ["o", "a", "os", "as", ...],
-    "pronouns": [...],
-    "prepositions": [...],
-    "adjectives": [...],
-    "adverbs": [...],
-    "conjunctions": [...]
+  // Use prompt from database
+  const overviewPromptData = systemPrompts['topic_overview'];
+  if (!overviewPromptData) {
+    console.error('Topic overview prompt not loaded from database');
+    return '';
   }
-}
-
-Context:
-- This topic is based on the textbook "Portuguese a Valor"
-- Use a simple, structured, practical teaching style focused on real-life usage
-
-Rules:
-- The explanation (summary, key_rules) MUST be in English
-- Use European Portuguese (Portugal) ONLY for Portuguese text
-- Examples must be bilingual: pt (PT-PT), en (English)
-
-Output language rules:
-- summary: English only
-- key_rules: English only
-- examples.pt: European Portuguese only
-- examples.en: English only
-- No Portuguese explanations outside examples.pt
-
-- Return ONLY valid JSON
-- Do NOT include any text before or after JSON
-- All required fields MUST be present
-- If a category is not relevant, return EXACTLY []
-
-- ALL artifact categories MUST be present
-- Do NOT invent data
-
-- Keep explanations strictly at A1/A2 level
-- Use simple language, short sentences
-- Avoid linguistic jargon
-
-- Follow a practical, beginner-friendly teaching style (Portuguese a Valor style)
-
-- If unsure, choose the simplest correct explanation
-- Do NOT hallucinate`;
+  
+  let prompt = overviewPromptData.content + '\n\n';
+  prompt += `Topic: ${topic.unit ? topic.unit + ' — ' : ''}${topic.name}\n`;
+  if (topic.custom_prompt) {
+    prompt += `${topic.custom_prompt}\n`;
+  }
+  
+  return prompt;
 }
 /**
  * Build prompt for exercise generation
  */
 function buildPrompt(topic) {
-  const globalPrompt = document.getElementById('global-prompt-input')?.value || DEFAULT_PROMPT;
+  // Use prompt from database instead of hardcoded constant
+  const defaultPromptData = systemPrompts['default'];
+  if (!defaultPromptData) {
+    console.error('Default prompt not loaded from database');
+    return '';
+  }
+  
+  const globalPrompt = defaultPromptData.content;
   const vocab = (topic.vocab || []).map(v => `${v.pt} = ${v.en||v.ru||''}`).join(', ');
   const openErrors = (topic.errors || []).filter(e => !e.fixed);
   
@@ -996,6 +1125,29 @@ async function onLogin(user) {
   document.getElementById('auth-screen').style.display = 'none';
   document.getElementById('app').style.display = 'grid';
   document.getElementById('user-email-label').textContent = user.email;
+  
+  // Check admin status
+  const { data: adminCheck } = await sb
+    .from('admins')
+    .select('id')
+    .eq('user_id', user.id)
+    .maybeSingle();
+  
+  isAdmin = !!adminCheck;
+  console.log('Admin status:', isAdmin);
+  
+  // Show/hide admin button
+  const adminBtn = document.getElementById('fn-admin');
+  if (adminBtn) {
+    adminBtn.style.display = isAdmin ? 'block' : 'none';
+  }
+  
+  // Load system prompts from DB
+  await loadSystemPrompts();
+  
+  // Load global API key
+  await loadGlobalApiKey();
+  
   await loadAllData();
   showHome();
 }
@@ -1072,6 +1224,46 @@ async function doLogout() {
 // ══════════════════════════════════════════════════════
 // DATA LOADING
 // ══════════════════════════════════════════════════════
+/**
+ * Load system prompts from database
+ */
+async function loadSystemPrompts() {
+  const { data: prompts, error } = await sb
+    .from('system_prompts')
+    .select('*');
+  
+  if (error) {
+    console.error('Error loading system prompts:', error);
+    return;
+  }
+  
+  systemPrompts = {};
+  prompts?.forEach(p => {
+    systemPrompts[p.prompt_type] = p;
+  });
+  
+  console.log('System prompts loaded:', Object.keys(systemPrompts));
+}
+
+/**
+ * Load global API key
+ */
+async function loadGlobalApiKey() {
+  const { data, error } = await sb
+    .from('system_settings')
+    .select('setting_value')
+    .eq('setting_key', 'global_api_key')
+    .maybeSingle();
+  
+  if (error) {
+    console.error('Error loading global API key:', error);
+    return;
+  }
+  
+  globalApiKey = data?.setting_value || null;
+  console.log('Global API key loaded:', globalApiKey ? 'Yes' : 'No');
+}
+
 async function loadAllData() {
   setSyncStatus('syncing...');
   try {
@@ -1171,6 +1363,16 @@ function showSettings() {
   showView('settings');
   document.getElementById('fn-settings').classList.add('active');
   loadSettingsForm();
+}
+
+async function showAdmin() {
+  if (!isAdmin) {
+    toast('Access denied: Admin only');
+    return;
+  }
+  showView('admin');
+  document.getElementById('fn-admin').classList.add('active');
+  await loadAdminPanel();
 }
 
 function showTopicDetail(topicId) {
@@ -1583,43 +1785,204 @@ async function saveTopicPrompt() {
 // ══════════════════════════════════════════════════════
 // SETTINGS
 // ══════════════════════════════════════════════════════
-function loadSettingsForm() {
-  const key = localStorage.getItem('pt_openai_key') || '';
-  document.getElementById('api-key-input').value = key ? '••••••••' + key.slice(-4) : '';
-  const ks = document.getElementById('key-status');
-  if (key) { ks.textContent = 'Set ✓'; ks.className = 'key-status set'; }
-  else { ks.textContent = 'Not set'; ks.className = 'key-status unset'; }
+async function loadSettingsForm() {
+  // Load user's personal API key
+  const { data } = await sb
+    .from('settings')
+    .select('user_api_key')
+    .eq('user_id', currentUser.id)
+    .maybeSingle();
+  
+  const userKey = data?.user_api_key || '';
+  const input = document.getElementById('user-api-key');
+  if (input) {
+    input.value = userKey ? '••••••••' + userKey.slice(-4) : '';
+  }
+  
+  updateApiKeyStatus();
 }
 
-function saveApiKey() {
-  const val = document.getElementById('api-key-input').value.trim();
-  if (!val || val.startsWith('••')) { toast('Enter your actual API key'); return; }
-  localStorage.setItem('pt_openai_key', val);
-  loadSettingsForm();
-  toast('API key saved (browser only)');
+async function updateApiKeyStatus() {
+  const { data } = await sb
+    .from('settings')
+    .select('user_api_key')
+    .eq('user_id', currentUser.id)
+    .maybeSingle();
+  
+  const status = document.getElementById('user-key-status');
+  if (!status) return;
+  
+  if (data?.user_api_key) {
+    status.textContent = 'Using personal key ✓';
+    status.className = 'key-status set';
+  } else {
+    status.textContent = 'Using global key';
+    status.className = 'key-status unset';
+  }
 }
 
-async function saveGlobalPrompt() {
-  const val = document.getElementById('global-prompt-input').value;
+async function saveUserApiKey() {
+  const val = document.getElementById('user-api-key').value.trim();
+  if (!val || val.startsWith('••')) { 
+    toast('Enter your actual API key'); 
+    return; 
+  }
   
-  const settingsPayload = { 
-    user_id: currentUser.id, 
-    global_prompt: val,
-    custom_prompt_edited: true // mark as manually edited
-  };
-  
-  console.log('📝 Saving global prompt:', settingsPayload);
-  
-  const { data, error } = await sb.from('settings').upsert(settingsPayload);
+  const { error } = await sb
+    .from('settings')
+    .upsert({
+      user_id: currentUser.id,
+      user_api_key: val
+    });
   
   if (error) {
-    console.error('❌ Save global prompt error:', error);
-    console.error('Error details:', JSON.stringify(error, null, 2));
-    toast('Error saving prompt: ' + error.message);
+    console.error('Error saving user API key:', error);
+    toast('Error saving API key');
   } else {
-    console.log('✅ Global prompt saved successfully');
-    toast('Global prompt saved & synced');
+    toast('Personal API key saved');
+    await loadSettingsForm();
   }
+}
+
+async function removeUserApiKey() {
+  if (!confirm('Switch to global API key?')) return;
+  
+  const { error } = await sb
+    .from('settings')
+    .update({ user_api_key: null })
+    .eq('user_id', currentUser.id);
+  
+  if (error) {
+    console.error('Error removing user API key:', error);
+    toast('Error');
+  } else {
+    document.getElementById('user-api-key').value = '';
+    toast('Switched to global API key');
+    await loadSettingsForm();
+  }
+}
+
+// ══════════════════════════════════════════════════════
+// ADMIN PANEL FUNCTIONS
+// ══════════════════════════════════════════════════════
+
+async function loadAdminPanel() {
+  // Load global API key
+  const { data: settings } = await sb
+    .from('system_settings')
+    .select('*');
+  
+  settings?.forEach(s => {
+    if (s.setting_key === 'global_api_key') {
+      const input = document.getElementById('admin-global-key');
+      if (input) {
+        const key = s.setting_value || '';
+        input.value = key ? '••••••••' + key.slice(-4) : '';
+      }
+      
+      const status = document.getElementById('global-key-status');
+      if (status) {
+        if (s.setting_value) {
+          status.textContent = 'Set ✓';
+          status.className = 'key-status set';
+        } else {
+          status.textContent = 'Not set';
+          status.className = 'key-status unset';
+        }
+      }
+    }
+  });
+  
+  // Load all prompts
+  const promptTypes = ['default', 'overview', 'grading', 'validator'];
+  for (const type of promptTypes) {
+    const promptData = systemPrompts[type === 'overview' ? 'topic_overview' : type];
+    if (promptData) {
+      const textareaId = `admin-prompt-${type}`;
+      const modelId = `admin-prompt-${type}-model`;
+      const tempId = `admin-prompt-${type}-temp`;
+      
+      const textarea = document.getElementById(textareaId);
+      const modelSelect = document.getElementById(modelId);
+      const tempInput = document.getElementById(tempId);
+      
+      if (textarea) textarea.value = promptData.content;
+      if (modelSelect) modelSelect.value = promptData.model;
+      if (tempInput) tempInput.value = promptData.temperature;
+    }
+  }
+}
+
+async function saveGlobalApiKey() {
+  const val = document.getElementById('admin-global-key').value.trim();
+  if (!val || val.startsWith('••')) {
+    toast('Enter your actual API key');
+    return;
+  }
+  
+  const { error } = await sb
+    .from('system_settings')
+    .upsert({
+      setting_key: 'global_api_key',
+      setting_value: val,
+      updated_by: currentUser.id,
+      updated_at: new Date().toISOString()
+    });
+  
+  if (error) {
+    console.error('Error saving global API key:', error);
+    toast('Error saving global API key');
+  } else {
+    globalApiKey = val;
+    toast('Global API key saved');
+    await loadAdminPanel();
+  }
+}
+
+async function savePrompt(promptType) {
+  // Map UI names to DB names
+  const dbType = promptType === 'overview' ? 'topic_overview' : promptType;
+  
+  const content = document.getElementById(`admin-prompt-${promptType}`).value;
+  const model = document.getElementById(`admin-prompt-${promptType}-model`).value;
+  const temperature = parseFloat(document.getElementById(`admin-prompt-${promptType}-temp`).value);
+  
+  if (!content.trim()) {
+    toast('Prompt content cannot be empty');
+    return;
+  }
+  
+  const existing = systemPrompts[dbType];
+  const version = existing ? existing.version + 1 : 1;
+  
+  const { error } = await sb
+    .from('system_prompts')
+    .upsert({
+      prompt_type: dbType,
+      content: content,
+      model: model,
+      temperature: temperature,
+      version: version,
+      updated_by: currentUser.id,
+      updated_at: new Date().toISOString()
+    });
+  
+  if (error) {
+    console.error('Error saving prompt:', error);
+    toast('Error saving prompt');
+  } else {
+    toast(`${promptType} prompt saved (v${version})`);
+    await loadSystemPrompts();
+    await loadAdminPanel();
+  }
+}
+
+function switchAdminTab(tab, btn) {
+  document.querySelectorAll('#view-admin .tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('#view-admin .tab-panel').forEach(p => p.classList.remove('active'));
+  
+  btn.classList.add('active');
+  document.getElementById(`admin-tab-${tab}`).classList.add('active');
 }
 
 /**
@@ -1940,9 +2303,14 @@ function hasDuplicateQuestions(items) {
  */
 async function validateExercises(exerciseJSON, apiKey) {
   try {
+    // Get model and temperature from system prompts
+    const validatorPromptData = systemPrompts['validator'];
+    const model = validatorPromptData?.model || 'gpt-5.4-mini';
+    const temperature = validatorPromptData?.temperature || 0;
+    
     const validation = await callOpenAI(apiKey, buildValidatorPrompt(exerciseJSON), {
-      model: 'gpt-5.4-mini',
-      temperature: 0,
+      model: model,
+      temperature: temperature,
       schema: VALIDATOR_SCHEMA,
       schemaName: 'validation_result'
     });
@@ -1955,10 +2323,19 @@ async function validateExercises(exerciseJSON, apiKey) {
 
 // Generate only topic overview without exercises
 async function generateTopicOverview() {
-  const apiKey = localStorage.getItem('pt_openai_key');
-  if (!apiKey) { toast('No API key — go to Settings'); return; }
+  const apiKey = await getActiveApiKey();
+  if (!apiKey) { 
+    toast('No API key configured. Contact administrator or set personal key in Settings.'); 
+    return; 
+  }
+  
   const topic = getTopic(currentTopicId);
   if (!topic) return;
+  
+  // Get model and temperature from system prompts
+  const overviewPromptData = systemPrompts['topic_overview'];
+  const model = overviewPromptData?.model || 'gpt-5.4-mini';
+  const temperature = overviewPromptData?.temperature || 0.2;
   
   const status = document.getElementById('gen-status');
   status.textContent = 'Generating topic overview'; 
@@ -1966,8 +2343,8 @@ async function generateTopicOverview() {
   
   try {
     const explainData = await callOpenAI(apiKey, buildTopicOverviewPrompt(topic), {
-      model: 'gpt-5.4-mini',
-      temperature: 0.2,
+      model: model,
+      temperature: temperature,
       schema: TOPIC_OVERVIEW_SCHEMA,
       schemaName: 'topic_overview'
     });
@@ -2048,10 +2425,20 @@ async function explainThenGenerate() {
 }
 
 async function generateExercise() {
-  const apiKey = localStorage.getItem('pt_openai_key');
-  if (!apiKey) { toast('No API key — go to Settings'); return; }
+  const apiKey = await getActiveApiKey();
+  if (!apiKey) { 
+    toast('No API key configured. Contact administrator or set personal key in Settings.'); 
+    return; 
+  }
+  
   const topic = getTopic(currentTopicId);
   if (!topic) return;
+  
+  // Get model and temperature from system prompts
+  const defaultPromptData = systemPrompts['default'];
+  const model = defaultPromptData?.model || 'gpt-5.4-mini';
+  const temperature = defaultPromptData?.temperature || 0.35;
+  
   const btn = document.getElementById('gen-btn');
   const status = document.getElementById('gen-exercise-status');
   btn.disabled = true;
@@ -2065,8 +2452,8 @@ async function generateExercise() {
   try {
     // Generate exercises
     let exerciseData = await callOpenAI(apiKey, buildPrompt(topic), {
-      model: 'gpt-5.4-mini',
-      temperature: 0.35,
+      model: model,
+      temperature: temperature,
       schema: EXERCISE_SCHEMA,
       schemaName: 'exercise_generation'
     });
@@ -2206,8 +2593,12 @@ async function submitExercise() {
     console.log('Submit blocked: graded =', graded, '| currentExercise =', !!currentExercise);
     return;
   }
-  const apiKey = localStorage.getItem('pt_openai_key');
-  if (!apiKey) { toast('No API key — go to Settings'); return; }
+  
+  const apiKey = await getActiveApiKey();
+  if (!apiKey) { 
+    toast('No API key configured. Contact administrator or set personal key in Settings.'); 
+    return; 
+  }
   
   const items = currentExercise.items || [];
   const answers = items.map((item, i) => {
@@ -2265,9 +2656,14 @@ async function submitExercise() {
   
   let results;
   try {
+    // Get model and temperature from system prompts
+    const gradingPromptData = systemPrompts['grading'];
+    const model = gradingPromptData?.model || 'gpt-5.4-mini';
+    const temperature = gradingPromptData?.temperature || 0;
+    
     const grading = await callOpenAI(apiKey, buildGradingPrompt(normalizedAnswers), {
-      model: 'gpt-5.4-mini',
-      temperature: 0,
+      model: model,
+      temperature: temperature,
       schema: GRADING_SCHEMA,
       schemaName: 'grading_result'
     });
