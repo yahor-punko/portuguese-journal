@@ -404,7 +404,7 @@ main{padding:2.5rem 3rem;max-width:760px;}
 const APP_VERSION = 'v7.3-FINAL';
 const BUILD_DATE = '2026-03-24';
 console.log(`%c🇵🇹 Portuguese Learning Journal ${APP_VERSION}`, 'font-weight: bold; font-size: 14px; color: #2a6b3f;');
-console.log(`Build: ${BUILD_DATE} | All Artifacts Required (new proms)`);
+console.log(`Build: ${BUILD_DATE} | All Artifacts Required (5.4-model)`);
 
 // ══════════════════════════════════════════════════════
 // CONFIG — replace with your Supabase project values
@@ -744,66 +744,117 @@ STRICT RULES:
 GENERAL:
 - Use European Portuguese (Portugal) ONLY for Portuguese text
 - All instructions and questions MUST be in English
-- Generate 5–7 exercises
+- Generate 5-7 exercises
 - Prefer correctness over creativity
 - Avoid ambiguity at all costs
+- Keep all content strictly at A1/A2 level
+- Do NOT rely on hidden context or previous exercises
 
 ANSWERS:
 - Each exercise MUST have exactly ONE canonical_answer
-- If multiple valid answers exist → include them in accepted_variants
+- If multiple valid answers exist, include them in accepted_variants
 - Do NOT include canonical_answer again inside accepted_variants
+- accepted_variants must contain only truly correct alternatives
 - Do NOT generate exercises where correctness depends on hidden context
+- explanation MUST clearly support the canonical_answer
 
 OPTIONS FIELD:
-- For type="choice" → options MUST be ["a) option1", "b) option2", "c) option3", "d) option4"]
-- For all other types → options MUST be [] (empty array)
-- canonical_answer for choice must match one option exactly (including the letter)
+- For type="choice", options MUST be exactly ["a) option1", "b) option2", "c) option3", "d) option4"]
+- For all other types, options MUST be [] (empty array)
+- For type="choice", canonical_answer MUST be ONLY the option letter: "a", "b", "c", or "d"
+- Do NOT use the full option text as canonical_answer
+- All 4 options must be non-empty and different
 
 QUALITY:
 - Portuguese must sound natural to a native speaker from Portugal
 - Grammar must be 100% correct
 - explanation MUST match the canonical_answer
 - Keep explanations short, simple, and A1/A2 level
+- Avoid linguistic jargon
+- Do NOT generate awkward, artificial, or overly academic Portuguese
 
-VARIETY:
-- Vary subjects (eu, tu, ele, nós, vocês, etc.)
-- Vary contexts (daily life, work, travel, etc.)
-- Do NOT repeat structure from recent exercises
-- Ensure each exercise is structurally different, not just different words
+TYPE RULES:
+
+FILL TYPE:
+- The question MUST contain a clear blank marked as ___
+- The sentence or question must be incomplete without the missing element
+- There must be exactly ONE clear expected completion
+- Prefer a single missing word or a very short phrase
+- Do NOT generate fill items from already complete sentences or questions
+- Do NOT generate fill items with multiple blanks
+- options MUST be []
+
+TRANSLATE TYPE:
+- The prompt MUST clearly specify what to translate
+- The source sentence must be unambiguous
+- The expected translation must have one clearly preferred A1/A2 answer
+- If another wording is also fully correct, include it in accepted_variants
+- options MUST be []
 
 CHOICE TYPE:
 - Only ONE correct option
-- canonical_answer must exactly match one item from options
-- All other options must be clearly wrong
+- canonical_answer MUST be ONLY the option letter: "a", "b", "c", or "d"
+- Exactly one option must be fully correct
+- All other options must be clearly wrong, not partially acceptable
+- Avoid distractors that could be accepted in a different context
+- Do NOT create choice items if you cannot produce 3 clearly incorrect distractors
+
+CORRECT TYPE:
+- The question MUST contain a sentence with exactly one clear mistake to fix
+- There must be exactly ONE clearly correct corrected sentence
+- Do NOT generate correct items where multiple corrections are equally valid
+- options MUST be []
+
+TRANSFORM TYPE:
+- The transformation instruction MUST be explicit
+- The target form must be clear (for example: negative, plural, formal, question, or person change)
+- There must be exactly ONE clearly expected transformed answer
+- Do NOT generate transform items with multiple equally valid outputs
+- options MUST be []
+
+VARIETY:
+- Vary subjects (eu, tu, ele, ela, nós, vocês, etc.)
+- Vary contexts (daily life, work, travel, introductions, family, etc.)
+- Do NOT repeat structure from recent exercises
+- Ensure each exercise is structurally different, not just different words
+- Mix exercise types when possible
+- Ensure each exercise tests a different micro-skill (for example: verb conjugation, pronoun use, article usage, word order, question formation)
 
 BATCH QUALITY RULES:
 - Do not generate duplicate or near-duplicate questions within the same batch
-- Treat questions as duplicates if they share the same sentence structure with only minor word changes (e.g., different names, professions, or nouns)
-
-- Do not generate more than one exercise using the same core grammar pattern (e.g., "Sou ___", "És ___", "Como te chamas?")
-
-- Ensure each exercise tests a different micro-skill (e.g., verb conjugation, pronoun use, word order, article usage)
-
-- Avoid repeating the same verb + person combination across multiple exercises unless the task type is fundamentally different
-
+- Treat questions as duplicates if they share the same sentence structure with only minor word changes (for example: different names, professions, or nouns)
+- Do not generate more than one exercise using the same core grammar pattern (for example: "Sou ___", "És ___", "Como te chamas?")
+- Avoid repeating the same verb + person combination across multiple exercises unless the task type and grammar focus are clearly different
 - Each item must be structurally distinct, not just lexically different
-
+- The batch must contain varied items, not repeated templates
 - For type="choice", always provide exactly 4 non-empty options
 - All 4 options must be different
 - If you cannot generate 4 good options, do not generate a choice item
 
-- The batch must contain varied items, not repeated templates
+GRAMMAR CATEGORY:
+- grammar_category must be specific and accurate
+- Use clear beginner-level labels such as "verb ser", "articles", "personal pronouns", "question formation", "verb chamar-se", "formal vs informal", "negation", or "word order"
+- Do NOT use vague labels like "grammar" or "mixed"
 
 SELF-CHECK:
-- Before finalizing, compare all generated items and remove any that are structurally similar or repetitive
+- Before finalizing, compare all generated items and remove any that are structurally similar, repetitive, ambiguous, or weak
+- Check that every fill item contains ___
+- Check that every non-choice item has options = []
+- Check that every choice item has exactly 4 options and canonical_answer is only "a", "b", "c", or "d"
+- Check that accepted_variants do not repeat canonical_answer
+- Check that all Portuguese is natural for Portugal
+- Check that each explanation matches the final canonical_answer
 
 IMPORTANT:
-- If an exercise is ambiguous → DO NOT generate it
-- If unsure → generate a simpler exercise
+- If an exercise is ambiguous, DO NOT generate it
+- If unsure, generate a simpler exercise
+- If a type cannot be generated cleanly, use another type instead
+- Prefer clarity and reliability over variety
 
 OUTPUT:
 - Return ONLY valid JSON
-- Do NOT include any text before or after JSON`;
+- Do NOT include any text before or after JSON
+- All fields shown in the schema MUST be present in every item`;
 
 /**
  * Build prompt for topic overview generation
@@ -1566,39 +1617,135 @@ async function saveGlobalPrompt() {
  * Build prompt for exercise validation
  */
 function buildValidatorPrompt(exerciseJSON) {
-  return `You are a strict quality validator for a European Portuguese learning app.
+  return `You are a strict quality validator for a European Portuguese (Portugal) learning app for an English-speaking learner.
 Task: Validate generated exercises BEFORE showing them to the user.
 
-Check the following:
-1. Does each exercise have exactly ONE correct answer?
-2. Are accepted_variants truly correct alternatives?
-3. Is the Portuguese natural and correct for Portugal?
-4. Does the question match the answer?
-5. Is there any ambiguity or multiple valid interpretations?
-6. Are multiple choice options valid (only one correct)?
-7. Does explanation match the answer?
-8. Is grammar_category correct?
-9. Is the level appropriate for A1/A2?
+Return ONLY valid JSON with this structure:
+{
+  "is_valid": true,
+  "issues": [
+    {
+      "severity": "error|warning",
+      "type": "AMBIGUOUS|MULTIPLE_CORRECT_ANSWERS|UNNATURAL_PT_PT|EXPLANATION_MISMATCH|GRAMMAR_ERROR|WRONG_GRAMMAR_CATEGORY|LEVEL_MISMATCH|INVALID_CHOICE_OPTIONS|DUPLICATE_QUESTIONS|INVALID_FILL_ITEM|INVALID_TYPE_FORMAT|ANSWER_FORMAT_MISMATCH|HIDDEN_CONTEXT|OTHER",
+      "message": "...",
+      "item_index": 0
+    }
+  ]
+}
 
-ADDITIONAL VALIDATION RULES:
-- Reject any choice item that has fewer or more than 4 options
-- Reject any choice item with duplicate options
-- Reject any batch containing duplicate or near-duplicate questions
-- Reject any two items that test the same sentence pattern with only trivial word changes
-- Reject malformed items that do not match their declared type
+VALIDATION CHECKLIST:
 
-Return structured JSON with issues categorized by severity and type.
+For each item and the whole batch, check:
+1. Exactly ONE correct answer exists
+2. accepted_variants are correct and necessary
+3. Portuguese is natural (Portugal)
+4. Question matches canonical_answer
+5. No ambiguity or multiple interpretations
+6. Choice items have only one correct option
+7. Explanation matches canonical_answer
+8. grammar_category is correct and specific
+9. Level is appropriate (A1/A2)
+10. Item matches declared type
+11. Answer format matches type
+12. No duplicates or near-duplicates in batch
 
-CRITICAL:
-- Reject exercises with ambiguity (AMBIGUOUS)
-- Reject exercises with more than one correct answer (MULTIPLE_CORRECT_ANSWERS)
+GENERAL RULES:
+- Instructions and questions must be in English
+- Portuguese must be European Portuguese (Portugal)
+- Reject items relying on hidden context
+- Each item MUST include all required fields:
+  type, question, canonical_answer, accepted_variants, options, grammar_category, explanation
+
+ANSWERS:
+- Reject if more than one correct answer exists and not captured in accepted_variants
+- Reject if accepted_variants contains canonical_answer
+- Reject if accepted_variants contains incorrect or ambiguous forms
+- Reject if canonical_answer conflicts with explanation
+
+TYPE VALIDATION:
+
+FILL:
+- MUST contain exactly one blank: ___
+- MUST be incomplete without the answer
+- Reject if already complete sentence/question
+- Reject if multiple valid completions exist
+- options MUST be []
+
+TRANSLATE:
+- Must clearly state what to translate
+- Reject if ambiguous or multiple valid translations missing from accepted_variants
+- options MUST be []
+
+CHOICE:
+- MUST have exactly 4 options
+- Options must be unique and non-empty
+- Format must be: "a) ...", "b) ...", "c) ...", "d) ..."
+- canonical_answer MUST be ONLY "a", "b", "c", or "d"
+- Reject if canonical_answer is full text instead of letter
+- Reject if more than one option is correct
+- Reject if distractors are partially correct or acceptable
+- options MUST NOT be [] for choice
+
+CORRECT:
+- MUST contain exactly one clear mistake
+- MUST have exactly one correct correction
+- options MUST be []
+
+TRANSFORM:
+- Instruction must clearly define transformation
+- Must result in exactly one correct output
+- options MUST be []
+
+OPTIONS FIELD:
+- Non-choice items MUST have options = []
+- Reject malformed or mismatched options
+
+QUALITY:
 - Reject unnatural Portuguese (UNNATURAL_PT_PT)
-- Reject mismatched explanation (EXPLANATION_MISMATCH)
 - Reject grammar errors (GRAMMAR_ERROR)
+- Reject mismatched explanation (EXPLANATION_MISMATCH)
 - Reject wrong grammar category (WRONG_GRAMMAR_CATEGORY)
-- Reject if too difficult (LEVEL_MISMATCH)
-- Reject choice with wrong number of options (INVALID_CHOICE_OPTIONS)
-- Reject duplicate questions (DUPLICATE_QUESTIONS)
+- Reject too difficult items (LEVEL_MISMATCH)
+- Reject vague grammar categories (e.g. "grammar", "mixed")
+
+DUPLICATION:
+- Reject duplicate or near-duplicate questions
+- Treat as duplicates if only minor word changes (names, nouns, etc.)
+- Reject repeated grammar patterns (e.g. multiple "Sou ___" items)
+- Reject repeated verb+person combos without new grammar focus
+
+FORMAT:
+- Reject if structure does not match schema
+- Reject if fields are missing
+- Reject if answer format does not match type
+
+SEVERITY:
+- "error" → must reject
+- "warning" → minor issue
+
+CRITICAL TYPES:
+AMBIGUOUS
+MULTIPLE_CORRECT_ANSWERS
+UNNATURAL_PT_PT
+EXPLANATION_MISMATCH
+GRAMMAR_ERROR
+WRONG_GRAMMAR_CATEGORY
+LEVEL_MISMATCH
+INVALID_CHOICE_OPTIONS
+DUPLICATE_QUESTIONS
+INVALID_FILL_ITEM
+INVALID_TYPE_FORMAT
+ANSWER_FORMAT_MISMATCH
+HIDDEN_CONTEXT
+
+FINAL DECISION:
+- is_valid = true ONLY if no errors exist
+- If any error → is_valid = false
+
+OUTPUT RULES:
+- Return ONLY valid JSON
+- No markdown
+- No extra text
 
 Input:
 ${JSON.stringify(exerciseJSON, null, 2)}`;
