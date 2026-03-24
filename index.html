@@ -1688,10 +1688,37 @@ function renderVocab() {
 // ERRORS
 // ══════════════════════════════════════════════════════
 async function toggleErrorFixed(id, currentFixed) {
-  const { error } = await sb.from('errors').update({ fixed: !currentFixed }).eq('id', id);
-  if (error) { toast('Error: ' + error.message); return; }
-  const t = getTopic(currentTopicId);
-  if (t) { const err = t.errors.find(e => e.id === id); if (err) err.fixed = !currentFixed; }
+  // If marking as fixed, delete from database
+  if (!currentFixed) {
+    const { error } = await sb.from('errors').delete().eq('id', id);
+    if (error) { 
+      console.error('Error deleting error:', error);
+      toast('Error: ' + error.message); 
+      return; 
+    }
+    
+    // Remove from local state
+    const t = getTopic(currentTopicId);
+    if (t) {
+      t.errors = t.errors.filter(e => e.id !== id);
+    }
+    
+    toast('Error removed');
+  } else {
+    // If unmarking as fixed (shouldn't happen with delete approach, but keep for safety)
+    const { error } = await sb.from('errors').update({ fixed: false }).eq('id', id);
+    if (error) { 
+      toast('Error: ' + error.message); 
+      return; 
+    }
+    
+    const t = getTopic(currentTopicId);
+    if (t) { 
+      const err = t.errors.find(e => e.id === id); 
+      if (err) err.fixed = false; 
+    }
+  }
+  
   renderErrors();
   renderTopicDetail();
 }
@@ -1915,9 +1942,19 @@ async function savePrompt(promptType) {
   // Map UI names to DB names
   const dbType = promptType === 'overview' ? 'topic_overview' : promptType;
   
-  const content = document.getElementById(`admin-prompt-${promptType}`).value;
-  const model = document.getElementById(`admin-prompt-${promptType}-model`).value;
-  const temperature = parseFloat(document.getElementById(`admin-prompt-${promptType}-temp`).value);
+  const contentEl = document.getElementById(`admin-prompt-${promptType}`);
+  const modelEl = document.getElementById(`admin-prompt-${promptType}-model`);
+  const tempEl = document.getElementById(`admin-prompt-${promptType}-temp`);
+  
+  if (!contentEl || !modelEl || !tempEl) {
+    console.error(`Elements not found for prompt type: ${promptType}`);
+    toast('Error: Form elements not found');
+    return;
+  }
+  
+  const content = contentEl.value;
+  const model = modelEl.value;
+  const temperature = parseFloat(tempEl.value);
   
   if (!content.trim()) {
     toast('Prompt content cannot be empty');
@@ -2327,7 +2364,10 @@ async function generateTopicOverview() {
     await sb.from('explanations').upsert({
       topic_id: currentTopicId,
       user_id: currentUser.id,
-      text: JSON.stringify(explainData)
+      text: JSON.stringify(explainData),
+      updated_at: new Date().toISOString()
+    }, {
+      onConflict: 'topic_id,user_id'  // Composite unique constraint
     });
     
     // Render the explanation
