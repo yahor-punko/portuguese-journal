@@ -707,52 +707,7 @@ async function callOpenAI(apiKey, prompt, options = {}) {
 // ══════════════════════════════════════════════════════
 // PROMPT BUILDERS
 // ══════════════════════════════════════════════════════
-/**
- * Build prompt for topic overview generation
- */
-function buildTopicOverviewPrompt(topic) {
-  return `You are a European Portuguese (Portugal) language tutor for an English-speaking learner.
-Task: Explain a grammar topic clearly and accurately.
-
-Topic: ${topic.unit ? topic.unit + ' — ' : ''}${topic.name}
-${topic.custom_prompt ? topic.custom_prompt : ''}
-
-Return ONLY valid JSON with this structure:
-{
-  "summary": "2-3 sentence explanation",
-  "key_rules": ["rule 1", "rule 2", "rule 3"],
-  "examples": [
-    {"pt": "...", "en": "..."}
-  ],
-  "artifacts": {
-    "verbs": [
-      {
-        "infinitive": "...",
-        "translation": "...",
-        "tense": "...",
-        "conjugations": [
-          {"pronoun": "eu", "form": "..."},
-          {"pronoun": "tu", "form": "..."},
-          {"pronoun": "ele/ela/você", "form": "..."},
-          {"pronoun": "nós", "form": "..."},
-          {"pronoun": "vós", "form": "..."},
-          {"pronoun": "eles/elas/vocês", "form": "..."}
-        ]
-      }
-    ]
-  }
-}
-
-Rules:
-- Use ONLY European Portuguese (Portugal)
-- Be factually correct and simple (A1/A2 level)
-- Include ONLY relevant artifact categories
-- Prefer correctness over completeness
-- No ambiguity or alternative interpretations
-- No markdown, no explanations outside JSON`;
-}
-
-// Default prompt for exercise generation (used globally)
+// Default prompt for exercise generation (used globally - must be declared first!)
 const DEFAULT_PROMPT = `You are a European Portuguese (Portugal) language exercise generator for an English-speaking learner (A1/A2 level).
 Task: Generate high-quality, unambiguous exercises.
 
@@ -814,9 +769,54 @@ IMPORTANT:
 Return ONLY JSON.`;
 
 /**
+ * Build prompt for topic overview generation
+ */
+function buildTopicOverviewPrompt(topic) {
+  return `You are a European Portuguese (Portugal) language tutor for an English-speaking learner.
+Task: Explain a grammar topic clearly and accurately.
+
+Topic: ${topic.unit ? topic.unit + ' — ' : ''}${topic.name}
+${topic.custom_prompt ? topic.custom_prompt : ''}
+
+Return ONLY valid JSON with this structure:
+{
+  "summary": "2-3 sentence explanation",
+  "key_rules": ["rule 1", "rule 2", "rule 3"],
+  "examples": [
+    {"pt": "...", "en": "..."}
+  ],
+  "artifacts": {
+    "verbs": [
+      {
+        "infinitive": "...",
+        "translation": "...",
+        "tense": "...",
+        "conjugations": [
+          {"pronoun": "eu", "form": "..."},
+          {"pronoun": "tu", "form": "..."},
+          {"pronoun": "ele/ela/você", "form": "..."},
+          {"pronoun": "nós", "form": "..."},
+          {"pronoun": "vós", "form": "..."},
+          {"pronoun": "eles/elas/vocês", "form": "..."}
+        ]
+      }
+    ]
+  }
+}
+
+Rules:
+- Use ONLY European Portuguese (Portugal)
+- Be factually correct and simple (A1/A2 level)
+- Include ONLY relevant artifact categories
+- Prefer correctness over completeness
+- No ambiguity or alternative interpretations
+- No markdown, no explanations outside JSON`;
+}
+/**
  * Build prompt for exercise generation
  */
 function buildPrompt(topic) {
+  const globalPrompt = document.getElementById('global-prompt-input')?.value || DEFAULT_PROMPT;
   const vocab = (topic.vocab || []).map(v => `${v.pt} = ${v.en||v.ru||''}`).join(', ');
   const openErrors = (topic.errors || []).filter(e => !e.fixed);
   
