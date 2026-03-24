@@ -419,6 +419,26 @@ let graded = false;
 // ══════════════════════════════════════════════════════
 // JSON SCHEMAS
 // ══════════════════════════════════════════════════════
+/**
+ * BACKWARD COMPATIBILITY NOTES:
+ * 
+ * Schema changes (v5 → v6):
+ * - Added: canonical_answer (replaces "answer")
+ * - Added: accepted_variants (array of alternative correct answers)
+ * - Added: options (array for choice questions, null for others)
+ * - Added: match_type (grading result type)
+ * - Added: should_store_as_error (smart error filtering)
+ * 
+ * Fallbacks in code:
+ * - submitExercise() line ~1856: `item.canonical_answer || item.answer`
+ * - submitExercise() line ~1857: `item.accepted_variants || []`
+ * 
+ * Database compatibility:
+ * - exercises table: unchanged (only stores error_count)
+ * - errors table: unchanged (text, explanation, grammar_category)
+ * - vocab table: unchanged (pt, en)
+ * - Exercise data stored in localStorage (not DB), so no migration needed
+ */
 const TOPIC_OVERVIEW_SCHEMA = {
   type: "object",
   additionalProperties: false,
@@ -518,25 +538,12 @@ const EXERCISE_SCHEMA = {
             items: { type: "string" }
           },
           options: {
-            type: "array",
-            items: { type: "string" },
-            minItems: 4,
-            maxItems: 4
+            type: ["array", "null"],
+            items: { type: "string" }
           },
           grammar_category: { type: "string" },
           explanation: { type: "string" }
-        },
-        allOf: [
-          {
-            if: {
-              properties: { type: { const: "choice" } },
-              required: ["type"]
-            },
-            then: {
-              required: ["options"]
-            }
-          }
-        ]
+        }
       }
     }
   }
@@ -576,7 +583,29 @@ const VALIDATOR_SCHEMA = {
         required: ["index", "item"],
         properties: {
           index: { type: "integer", minimum: 0 },
-          item: EXERCISE_SCHEMA.properties.items.items // Reuse exercise item schema
+          item: {
+            type: "object",
+            additionalProperties: false,
+            required: ["type", "question", "canonical_answer", "accepted_variants", "grammar_category", "explanation"],
+            properties: {
+              type: {
+                type: "string",
+                enum: ["fill", "translate", "choice", "correct", "transform"]
+              },
+              question: { type: "string" },
+              canonical_answer: { type: "string" },
+              accepted_variants: {
+                type: "array",
+                items: { type: "string" }
+              },
+              options: {
+                type: ["array", "null"],
+                items: { type: "string" }
+              },
+              grammar_category: { type: "string" },
+              explanation: { type: "string" }
+            }
+          }
         }
       }
     }
@@ -739,7 +768,7 @@ Return ONLY valid JSON:
       "question": "...",
       "canonical_answer": "...",
       "accepted_variants": ["...", "..."],
-      "options": ["...", "..."], 
+      "options": ["a) ...", "b) ...", "c) ...", "d) ..."] OR null,
       "grammar_category": "...",
       "explanation": "short explanation"
     }
@@ -760,6 +789,11 @@ ANSWERS:
 - If multiple valid answers exist → include them in accepted_variants
 - Do NOT include canonical_answer again inside accepted_variants
 - Do NOT generate exercises where correctness depends on hidden context
+
+OPTIONS FIELD:
+- For type="choice" → options must be an array of 4 strings ["a) ...", "b) ...", "c) ...", "d) ..."]
+- For all other types → options must be null
+- canonical_answer for choice must match one option exactly (including the letter)
 
 QUALITY:
 - Portuguese must sound natural to a native speaker from Portugal
