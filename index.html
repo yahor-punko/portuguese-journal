@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Português — Learning Journal</title>
-<!-- VERSION: v7.3-FINAL (5.4-model) | Build: 2026-03-24 -->
+<!-- VERSION: v7.6-FINAL (Choice Fix + Liberal Grading) | Build: 2026-03-24 -->
 <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;1,400&family=Geist+Mono:wght@300;400;500&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <style>
@@ -264,16 +264,25 @@ main{padding:2.5rem 3rem;max-width:760px;}
       <span class="chip" id="td-prog-chip">Not started</span>
     </div>
     <div class="tabs" style="margin-top:1.5rem;">
-      <button class="tab-btn active" onclick="switchTab('exercises',this)">Exercises</button>
+      <button class="tab-btn active" onclick="switchTab('overview',this)">Overview</button>
+      <button class="tab-btn" onclick="switchTab('exercises',this)">Exercises</button>
       <button class="tab-btn" onclick="switchTab('vocab',this)">Vocabulary <span id="vocab-count" style="font-size:10px;color:var(--ink3);font-family:'Geist Mono',monospace;"></span></button>
       <button class="tab-btn" onclick="switchTab('errors',this)">Errors <span id="error-count" style="font-size:10px;color:var(--red);font-family:'Geist Mono',monospace;"></span></button>
       <button class="tab-btn" onclick="switchTab('prompt',this)">Prompt</button>
     </div>
 
-    <div id="tab-exercises" class="tab-panel active">
+    <div id="tab-overview" class="tab-panel active">
+      <div class="btn-row" style="margin-bottom:1.25rem;">
+        <button class="btn" id="topic-overview-btn" onclick="generateTopicOverview()">Generate topic overview</button>
+        <div class="gen-status" id="gen-status"></div>
+      </div>
+      <div id="overview-area"></div>
+    </div>
+
+    <div id="tab-exercises" class="tab-panel">
       <div class="btn-row" style="margin-bottom:1.25rem;">
         <button class="btn" id="gen-btn" onclick="generateExercise()">Generate exercise</button>
-        <div class="gen-status" id="gen-status"></div>
+        <div class="gen-status" id="gen-exercise-status"></div>
       </div>
       <div id="exercise-area"></div>
     </div>
@@ -401,10 +410,10 @@ main{padding:2.5rem 3rem;max-width:760px;}
 // ══════════════════════════════════════════════════════
 // VERSION INFO
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v7.3-FINAL';
+const APP_VERSION = 'v7.6-FINAL';
 const BUILD_DATE = '2026-03-24';
 console.log(`%c🇵🇹 Portuguese Learning Journal ${APP_VERSION}`, 'font-weight: bold; font-size: 14px; color: #2a6b3f;');
-console.log(`Build: ${BUILD_DATE} | All Artifacts Required (5.4-model)`);
+console.log(`Build: ${BUILD_DATE} | Choice Fix + Liberal Grading`);
 
 // ══════════════════════════════════════════════════════
 // CONFIG — replace with your Supabase project values
@@ -790,8 +799,6 @@ TRANSLATE TYPE:
 - The expected translation must have one clearly preferred A1/A2 answer
 - If another wording is also fully correct, include it in accepted_variants
 - options MUST be []
-- If more than one natural correct translation exists, include all clearly valid alternatives in accepted_variants
-- Do NOT generate translation items with multiple common answers unless those answers are included in accepted_variants
 
 CHOICE TYPE:
 - Only ONE correct option
@@ -1195,7 +1202,7 @@ async function loadCachedExplanation() {
   const topic = getTopic(currentTopicId);
   if (!topic) return;
   
-  const area = document.getElementById('exercise-area');
+  const area = document.getElementById('overview-area');
   
   // Check if explanation is cached
   const { data: cached } = await sb.from('explanations').select('*').eq('topic_id', currentTopicId).eq('user_id', currentUser.id).single();
@@ -1678,11 +1685,6 @@ TRANSLATE:
 - Reject if ambiguous or multiple valid translations missing from accepted_variants
 - options MUST be []
 
-TRANSLATION STRICTNESS:
-- For translation items, explicitly check if multiple common, natural translations exist
-- If more than one widely used A1/A2 translation exists, ALL must be included in accepted_variants
-- If at least one common alternative is missing → reject (MULTIPLE_CORRECT_ANSWERS)
-
 CHOICE:
 - MUST have exactly 4 options
 - Options must be unique and non-empty
@@ -1767,19 +1769,26 @@ function buildGradingPrompt(normalizedAnswers) {
 CRITICAL: Compare the normalized version of the student's answer (given_normalized) against:
 1. canonical_normalized (the main correct answer)
 2. accepted_variants_normalized (alternative correct answers)
+3. OTHER VALID ALTERNATIVES that are grammatically correct and semantically equivalent
 
 If given_normalized matches ANY of these → mark as CORRECT.
 
 GRADING RULES:
-1. If given_normalized matches canonical_normalized OR any variant → CORRECT
-2. Punctuation and capitalization are already normalized — ignore them
-3. Check for missing/wrong accents: é vs e, ã vs a, ç vs c, ó vs o, etc.
-4. Check for incorrect verb forms, articles, gender agreement, word order
-5. DO NOT mention punctuation or capitalization in explanations
+1. If given_normalized matches canonical_normalized OR any variant → CORRECT (match_type: "exact" or "accepted_variant")
+2. If given_normalized is a DIFFERENT but EQUALLY CORRECT way to express the same thing → CORRECT (match_type: "accepted_variant")
+3. Examples of valid alternatives:
+   - "Como se chama?" and "Qual é o seu nome?" both mean "What is your name?" (BOTH CORRECT)
+   - "Ela é a Maria" and "Ela é Maria" both work (BOTH CORRECT if article is optional)
+   - Different word order that preserves meaning and is natural in PT-PT
+4. Punctuation and capitalization are already normalized — ignore them
+5. Check for missing/wrong accents: é vs e, ã vs a, ç vs c, ó vs o, etc.
+6. Check for incorrect verb forms, articles, gender agreement, word order
+7. DO NOT mention punctuation or capitalization in explanations
+8. DO NOT mark an answer wrong just because it's not in accepted_variants if it's grammatically correct and semantically equivalent
 
 MATCH TYPES:
 - exact: Matches canonical_normalized exactly
-- accepted_variant: Matches one of accepted_variants_normalized
+- accepted_variant: Matches one of accepted_variants_normalized OR is another valid way to say the same thing
 - minor_accent_error: Wrong accent but otherwise correct
 - grammar_error: Wrong verb form, article, gender, etc.
 - word_choice_error: Wrong word entirely
@@ -1787,7 +1796,7 @@ MATCH TYPES:
 
 SHOULD STORE AS ERROR:
 - true: Store this mistake for future reinforcement (grammar errors, word choice)
-- false: Don't store (minor accent errors that user likely knows)
+- false: Don't store (minor accent errors that user likely knows, OR correct alternatives)
 
 For CORRECT answers:
 - Set "correct": true
@@ -1801,6 +1810,8 @@ For WRONG answers:
 - Provide specific explanation (what grammar rule was violated)
 - Set "should_store_as_error": true for significant errors, false for minor accent mistakes
 - Show the canonical answer as reference
+
+IMPORTANT: Be generous with "accepted_variant" - if the student's answer is grammatically correct and means the same thing, mark it correct even if it's not in the accepted_variants list.
 
 Return structured JSON with match_type and should_store_as_error for each result.
 
@@ -2042,16 +2053,13 @@ async function generateExercise() {
   const topic = getTopic(currentTopicId);
   if (!topic) return;
   const btn = document.getElementById('gen-btn');
-  const status = document.getElementById('gen-status');
+  const status = document.getElementById('gen-exercise-status');
   btn.disabled = true;
   status.textContent = 'Generating'; status.classList.add('loading');
   
-  // Save existing explanation before clearing
+  // Clear exercise area
   const area = document.getElementById('exercise-area');
-  const existingExplanation = area.querySelector('[data-explanation]');
-  const explanationHTML = existingExplanation ? existingExplanation.outerHTML : '';
-  
-  area.innerHTML = explanationHTML; // Keep explanation, clear exercises
+  area.innerHTML = '';
   currentExercise = null; currentAnswers = {}; graded = false;
 
   try {
@@ -2185,14 +2193,9 @@ function renderExercise() {
   </div>
   <div id="result-banner" style="margin-top:1rem;"></div>`;
   
-  // Append exercises after explanation (if exists)
+  // Render exercises directly
   const area = document.getElementById('exercise-area');
-  const explanation = area.querySelector('[data-explanation]');
-  if (explanation) {
-    area.innerHTML = explanation.outerHTML + html;
-  } else {
-    area.innerHTML = html;
-  }
+  area.innerHTML = html;
 }
 
 // ══════════════════════════════════════════════════════
@@ -2207,12 +2210,33 @@ async function submitExercise() {
   if (!apiKey) { toast('No API key — go to Settings'); return; }
   
   const items = currentExercise.items || [];
-  const answers = items.map((item, i) => ({ 
-    question: item.question, 
-    canonical: item.canonical_answer || item.answer, // Fallback to old format
-    variants: item.accepted_variants || [],
-    given: (currentAnswers[i]||'').trim()
-  }));
+  const answers = items.map((item, i) => {
+    let canonical = item.canonical_answer || item.answer; // Fallback to old format
+    
+    // For choice questions, ensure canonical_answer is just the letter
+    if (item.type === 'choice' && canonical) {
+      // Extract letter from canonical if it contains full option text
+      const letterMatch = canonical.trim().match(/^([a-d])\)/);
+      if (letterMatch) {
+        canonical = letterMatch[1]; // Extract just "a", "b", "c", or "d"
+      } else if (canonical.length > 1 && !['a', 'b', 'c', 'd'].includes(canonical.toLowerCase())) {
+        // If canonical is not a single letter, try to find which option it matches
+        const matchingOption = item.options?.findIndex(opt => 
+          opt.toLowerCase().includes(canonical.toLowerCase())
+        );
+        if (matchingOption !== -1) {
+          canonical = String.fromCharCode(97 + matchingOption); // 97 = 'a'
+        }
+      }
+    }
+    
+    return { 
+      question: item.question, 
+      canonical: canonical,
+      variants: item.accepted_variants || [],
+      given: (currentAnswers[i]||'').trim()
+    };
+  });
   
   // Disable inputs and button during grading
   items.forEach((_, i) => { const inp = document.getElementById('ex-inp-'+i); if (inp) inp.disabled = true; });
