@@ -970,12 +970,24 @@ async function loadAllData() {
     // Auto-migrate to new default if user hasn't customized
     if (savedVersion < PROMPT_VERSION && (!settingsData || !settingsData.custom_prompt_edited)) {
       globalPrompt = DEFAULT_PROMPT;
-      await sb.from('settings').upsert({ 
+      
+      const settingsPayload = { 
         user_id: currentUser.id, 
         global_prompt: DEFAULT_PROMPT,
         prompt_version: PROMPT_VERSION,
         custom_prompt_edited: false
-      });
+      };
+      
+      console.log('📝 Upserting settings:', settingsPayload);
+      
+      const { data, error } = await sb.from('settings').upsert(settingsPayload);
+      
+      if (error) {
+        console.error('❌ Settings upsert error:', error);
+        console.error('Error details:', JSON.stringify(error, null, 2));
+      } else {
+        console.log('✅ Settings saved successfully');
+      }
     }
     
     document.getElementById('global-prompt-input').value = globalPrompt;
@@ -1460,12 +1472,25 @@ function saveApiKey() {
 
 async function saveGlobalPrompt() {
   const val = document.getElementById('global-prompt-input').value;
-  await sb.from('settings').upsert({ 
+  
+  const settingsPayload = { 
     user_id: currentUser.id, 
     global_prompt: val,
     custom_prompt_edited: true // mark as manually edited
-  });
-  toast('Global prompt saved & synced');
+  };
+  
+  console.log('📝 Saving global prompt:', settingsPayload);
+  
+  const { data, error } = await sb.from('settings').upsert(settingsPayload);
+  
+  if (error) {
+    console.error('❌ Save global prompt error:', error);
+    console.error('Error details:', JSON.stringify(error, null, 2));
+    toast('Error saving prompt: ' + error.message);
+  } else {
+    console.log('✅ Global prompt saved successfully');
+    toast('Global prompt saved & synced');
+  }
 }
 
 /**
