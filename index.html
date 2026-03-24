@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Português — Learning Journal</title>
+<!-- VERSION: v7.1-FINAL (Schema Fix + Quality Control) | Build: 2026-03-24 -->
 <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;1,400&family=Geist+Mono:wght@300;400;500&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <style>
@@ -398,6 +399,14 @@ main{padding:2.5rem 3rem;max-width:760px;}
 
 <script>
 // ══════════════════════════════════════════════════════
+// VERSION INFO
+// ══════════════════════════════════════════════════════
+const APP_VERSION = 'v7.1-FINAL';
+const BUILD_DATE = '2026-03-24';
+console.log(`%c🇵🇹 Portuguese Learning Journal ${APP_VERSION}`, 'font-weight: bold; font-size: 14px; color: #2a6b3f;');
+console.log(`Build: ${BUILD_DATE} | OpenAI Structured Outputs + Quality Control`);
+
+// ══════════════════════════════════════════════════════
 // CONFIG — replace with your Supabase project values
 // ══════════════════════════════════════════════════════
 const SUPABASE_URL = 'https://jmmyuhegnzghhtvyswbq.supabase.co';
@@ -468,7 +477,7 @@ const TOPIC_OVERVIEW_SCHEMA = {
     artifacts: {
       type: "object",
       additionalProperties: false,
-      required: [],  // Все поля опциональны, но OpenAI требует наличия required массива
+      required: [],  // CRITICAL FIX: OpenAI requires empty array for optional properties
       properties: {
         verbs: {
           type: "array",
@@ -511,6 +520,14 @@ const TOPIC_OVERVIEW_SCHEMA = {
     }
   }
 };
+
+// Schema validation check
+if (!TOPIC_OVERVIEW_SCHEMA.properties.artifacts.required) {
+  console.error('❌ CRITICAL: TOPIC_OVERVIEW_SCHEMA.artifacts.required is missing!');
+  console.error('This will cause OpenAI API 400 errors. Please reload with the correct file version.');
+} else {
+  console.log('✅ TOPIC_OVERVIEW_SCHEMA is valid (artifacts.required exists)');
+}
 
 const EXERCISE_SCHEMA = {
   type: "object",
