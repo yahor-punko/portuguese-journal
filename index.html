@@ -468,6 +468,7 @@ const TOPIC_OVERVIEW_SCHEMA = {
     artifacts: {
       type: "object",
       additionalProperties: false,
+      required: [],  // Все поля опциональны, но OpenAI требует наличия required массива
       properties: {
         verbs: {
           type: "array",
@@ -507,7 +508,6 @@ const TOPIC_OVERVIEW_SCHEMA = {
         adverbs: { type: "array", items: { type: "string" } },
         conjunctions: { type: "array", items: { type: "string" } }
       }
-      // НЕТ required - все поля artifacts опциональны
     }
   }
 };
@@ -1750,8 +1750,7 @@ async function generateTopicOverview() {
     await sb.from('explanations').upsert({
       topic_id: currentTopicId,
       user_id: currentUser.id,
-      text: JSON.stringify(explainData),
-      updated_at: new Date().toISOString()
+      text: JSON.stringify(explainData)
     });
     
     // Render the explanation
@@ -1806,8 +1805,7 @@ async function explainThenGenerate() {
       await sb.from('explanations').upsert({
         topic_id: currentTopicId,
         user_id: currentUser.id,
-        text: JSON.stringify(explainData),
-        updated_at: new Date().toISOString()
+        text: JSON.stringify(explainData)
       });
       
       area.innerHTML = renderTopicExplanation(explainData);
