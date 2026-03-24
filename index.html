@@ -506,8 +506,8 @@ const TOPIC_OVERVIEW_SCHEMA = {
         adjectives: { type: "array", items: { type: "string" } },
         adverbs: { type: "array", items: { type: "string" } },
         conjunctions: { type: "array", items: { type: "string" } }
-      },
-      required: []
+      }
+      // НЕТ required - все поля artifacts опциональны
     }
   }
 };
@@ -662,7 +662,7 @@ const GRADING_SCHEMA = {
  */
 async function callOpenAI(apiKey, prompt, options = {}) {
   const {
-    model = 'gpt-5.4-mini',
+    model = 'gpt-4o-mini',
     temperature = 0,
     schema = null,
     schemaName = 'response'
@@ -752,11 +752,8 @@ Rules:
 - No markdown, no explanations outside JSON`;
 }
 
-/**
- * Build prompt for exercise generation
- */
-function buildPrompt(topic) {
-  const DEFAULT_PROMPT = `You are a European Portuguese (Portugal) language exercise generator for an English-speaking learner (A1/A2 level).
+// Default prompt for exercise generation (used globally)
+const DEFAULT_PROMPT = `You are a European Portuguese (Portugal) language exercise generator for an English-speaking learner (A1/A2 level).
 Task: Generate high-quality, unambiguous exercises.
 
 Return ONLY valid JSON:
@@ -815,8 +812,11 @@ IMPORTANT:
 - If unsure → generate a simpler exercise
 
 Return ONLY JSON.`;
-  
-  const globalPrompt = document.getElementById('global-prompt-input')?.value || DEFAULT_PROMPT;
+
+/**
+ * Build prompt for exercise generation
+ */
+function buildPrompt(topic) {
   const vocab = (topic.vocab || []).map(v => `${v.pt} = ${v.en||v.ru||''}`).join(', ');
   const openErrors = (topic.errors || []).filter(e => !e.fixed);
   
@@ -1638,7 +1638,7 @@ function renderTopicExplanation(explainData) {
 async function validateExercises(exerciseJSON, apiKey) {
   try {
     const validation = await callOpenAI(apiKey, buildValidatorPrompt(exerciseJSON), {
-      model: 'gpt-5.4-mini',
+      model: 'gpt-4o-mini',
       temperature: 0,
       schema: VALIDATOR_SCHEMA,
       schemaName: 'validation_result'
@@ -1663,7 +1663,7 @@ async function generateTopicOverview() {
   
   try {
     const explainData = await callOpenAI(apiKey, buildTopicOverviewPrompt(topic), {
-      model: 'gpt-5.4-mini',
+      model: 'gpt-4o-mini',
       temperature: 0.2,
       schema: TOPIC_OVERVIEW_SCHEMA,
       schemaName: 'topic_overview'
@@ -1719,7 +1719,7 @@ async function explainThenGenerate() {
 
     try {
       const explainData = await callOpenAI(apiKey, buildTopicOverviewPrompt(topic), {
-        model: 'gpt-5.4-mini',
+        model: 'gpt-4o-mini',
         temperature: 0.2,
         schema: TOPIC_OVERVIEW_SCHEMA,
         schemaName: 'topic_overview'
@@ -1767,7 +1767,7 @@ async function generateExercise() {
   try {
     // Generate exercises
     let exerciseData = await callOpenAI(apiKey, buildPrompt(topic), {
-      model: 'gpt-5.4-mini',
+      model: 'gpt-4o-mini',
       temperature: 0.35,
       schema: EXERCISE_SCHEMA,
       schemaName: 'exercise_generation'
@@ -1792,7 +1792,7 @@ async function generateExercise() {
       status.textContent = 'Regenerating';
       
       exerciseData = await callOpenAI(apiKey, buildPrompt(topic), {
-        model: 'gpt-5.4-mini',
+        model: 'gpt-4o-mini',
         temperature: 0.35,
         schema: EXERCISE_SCHEMA,
         schemaName: 'exercise_generation'
@@ -1906,7 +1906,7 @@ async function submitExercise() {
   let results;
   try {
     const grading = await callOpenAI(apiKey, buildGradingPrompt(normalizedAnswers), {
-      model: 'gpt-5.4-mini',
+      model: 'gpt-4o-mini',
       temperature: 0,
       schema: GRADING_SCHEMA,
       schemaName: 'grading_result'
