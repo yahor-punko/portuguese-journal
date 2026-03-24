@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Português — Learning Journal</title>
-<!-- VERSION: v7.3-FINAL (All Artifacts Required) | Build: 2026-03-24 -->
+<!-- VERSION: v7.3-FINAL (5.4-model) | Build: 2026-03-24 -->
 <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;1,400&family=Geist+Mono:wght@300;400;500&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <style>
@@ -674,7 +674,7 @@ const GRADING_SCHEMA = {
  */
 async function callOpenAI(apiKey, prompt, options = {}) {
   const {
-    model = 'gpt-4o-mini',
+    model = 'gpt-5.4-mini',
     temperature = 0,
     schema = null,
     schemaName = 'response'
@@ -1736,7 +1736,7 @@ function hasDuplicateQuestions(items) {
 async function validateExercises(exerciseJSON, apiKey) {
   try {
     const validation = await callOpenAI(apiKey, buildValidatorPrompt(exerciseJSON), {
-      model: 'gpt-4o-mini',
+      model: 'gpt-5.4-mini',
       temperature: 0,
       schema: VALIDATOR_SCHEMA,
       schemaName: 'validation_result'
@@ -1761,7 +1761,7 @@ async function generateTopicOverview() {
   
   try {
     const explainData = await callOpenAI(apiKey, buildTopicOverviewPrompt(topic), {
-      model: 'gpt-4o-mini',
+      model: 'gpt-5.4-mini',
       temperature: 0.2,
       schema: TOPIC_OVERVIEW_SCHEMA,
       schemaName: 'topic_overview'
@@ -1816,7 +1816,7 @@ async function explainThenGenerate() {
 
     try {
       const explainData = await callOpenAI(apiKey, buildTopicOverviewPrompt(topic), {
-        model: 'gpt-4o-mini',
+        model: 'gpt-5.4-mini',
         temperature: 0.2,
         schema: TOPIC_OVERVIEW_SCHEMA,
         schemaName: 'topic_overview'
@@ -1863,7 +1863,7 @@ async function generateExercise() {
   try {
     // Generate exercises
     let exerciseData = await callOpenAI(apiKey, buildPrompt(topic), {
-      model: 'gpt-4o-mini',
+      model: 'gpt-5.4-mini',
       temperature: 0.35,
       schema: EXERCISE_SCHEMA,
       schemaName: 'exercise_generation'
@@ -1904,7 +1904,7 @@ async function generateExercise() {
       status.textContent = 'Regenerating (quality check failed)';
       
       exerciseData = await callOpenAI(apiKey, buildPrompt(topic), {
-        model: 'gpt-4o-mini',
+        model: 'gpt-5.4-mini',
         temperature: 0.35,
         schema: EXERCISE_SCHEMA,
         schemaName: 'exercise_generation'
@@ -1934,7 +1934,7 @@ async function generateExercise() {
       status.textContent = 'Regenerating';
       
       exerciseData = await callOpenAI(apiKey, buildPrompt(topic), {
-        model: 'gpt-4o-mini',
+        model: 'gpt-5.4-mini',
         temperature: 0.35,
         schema: EXERCISE_SCHEMA,
         schemaName: 'exercise_generation'
@@ -2048,7 +2048,7 @@ async function submitExercise() {
   let results;
   try {
     const grading = await callOpenAI(apiKey, buildGradingPrompt(normalizedAnswers), {
-      model: 'gpt-4o-mini',
+      model: 'gpt-5.4-mini',
       temperature: 0,
       schema: GRADING_SCHEMA,
       schemaName: 'grading_result'
