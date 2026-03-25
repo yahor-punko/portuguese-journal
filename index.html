@@ -326,9 +326,9 @@ main{padding:2.5rem 3rem;max-width:760px;}
         <input type="text" id="global-vadd-en" placeholder="thank you">
       </div>
       <div class="field" style="flex:1;margin:0;">
-        <label>Topic (optional)</label>
+        <label>Topic</label>
         <select id="global-vadd-topic">
-          <option value="">— no topic —</option>
+          <!-- Populated dynamically -->
         </select>
       </div>
       <button class="btn btn-sm" onclick="addGlobalVocab()">Add</button>
@@ -1734,22 +1734,20 @@ async function addGlobalVocab() {
   const topicId = document.getElementById('global-vadd-topic').value;
   
   if (!pt) { toast('Portuguese word required'); return; }
+  if (!topicId) { toast('Please select a topic'); return; }
   
   const payload = {
     user_id: currentUser.id,
+    topic_id: parseInt(topicId),
     pt: pt.toLowerCase(),
     en: en
   };
   
-  if (topicId) {
-    payload.topic_id = parseInt(topicId);
-    
-    // Check if word already exists in this topic
-    const topic = getTopic(parseInt(topicId));
-    if (topic && topic.vocab.find(v => v.pt === pt.toLowerCase())) {
-      toast('Word already exists in this topic');
-      return;
-    }
+  // Check if word already exists in this topic
+  const topic = getTopic(parseInt(topicId));
+  if (topic && topic.vocab.find(v => v.pt === pt.toLowerCase())) {
+    toast('Word already exists in this topic');
+    return;
   }
   
   const { data, error } = await sb.from('vocab').insert(payload).select().single();
@@ -1763,10 +1761,7 @@ async function addGlobalVocab() {
   }
   
   // Add to local state
-  if (topicId) {
-    const topic = getTopic(parseInt(topicId));
-    if (topic) topic.vocab.push(data);
-  }
+  if (topic) topic.vocab.push(data);
   
   // Clear inputs
   document.getElementById('global-vadd-pt').value = '';
@@ -1832,8 +1827,13 @@ function renderGlobalVocabulary() {
   
   // Populate topic select dropdown
   const selectEl = document.getElementById('global-vadd-topic');
-  selectEl.innerHTML = '<option value="">— no topic —</option>' + 
-    topics.map(t => `<option value="${t.id}">${t.unit ? t.unit + ' — ' : ''}${t.name}</option>`).join('');
+  if (topics.length === 0) {
+    selectEl.innerHTML = '<option value="">— no topics yet —</option>';
+  } else {
+    selectEl.innerHTML = topics.map((t, i) => 
+      `<option value="${t.id}"${i === 0 ? ' selected' : ''}>${t.unit ? t.unit + ' — ' : ''}${t.name}</option>`
+    ).join('');
+  }
   
   // Render vocabulary list
   const listEl = document.getElementById('global-vocab-list');
