@@ -1917,7 +1917,7 @@ function renderErrors() {
       </div>`;
     html += sortGroup(errs).map(e => `
       <div class="error-row">
-        <div class="check-box${e.fixed?' done':''}" onclick="toggleErrorFixed(${e.id},${e.fixed})"></div>
+        <div class="check-box${e.fixed?' done':''}" data-error-id="${e.id}" data-fixed="${e.fixed}"></div>
         <div>
           <div class="error-text${e.fixed?' done':''}">${e.text}</div>
           ${e.explanation ? `<div class="error-explanation">${e.explanation}</div>` : ''}
@@ -1927,6 +1927,15 @@ function renderErrors() {
     html += '</div>';
   });
   el.innerHTML = html;
+  
+  // Setup event delegation for checkboxes
+  el.onclick = (e) => {
+    const checkBox = e.target.closest('.check-box');
+    if (!checkBox) return;
+    const errorId = parseInt(checkBox.dataset.errorId);
+    const isFixed = checkBox.dataset.fixed === 'true';
+    toggleErrorFixed(errorId, isFixed);
+  };
 }
 
 // ══════════════════════════════════════════════════════
