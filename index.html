@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Português — Learning Journal</title>
-<!-- VERSION: v8.8.6 | Build: 2026-03-26 | Debug: DB access diagnostics -->
+<!-- VERSION: v8.8.7 | Build: 2026-03-26 | Fixed loadingOverlay redeclaration -->
 <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;1,400&family=Geist+Mono:wght@300;400;500&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <style>
@@ -980,10 +980,10 @@ main{padding:2.5rem 3rem;max-width:760px;}
 // ══════════════════════════════════════════════════════
 // VERSION INFO
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v8.8.6';
+const APP_VERSION = 'v8.8.7';
 const BUILD_DATE = '2026-03-26';
 console.log(`%c🇵🇹 Portuguese Learning Journal ${APP_VERSION}`, 'font-weight: bold; font-size: 14px; color: #2a6b3f;');
-console.log(`Build: ${BUILD_DATE} | DB access diagnostics`);
+console.log(`Build: ${BUILD_DATE} | Fixed: loading race condition`);
 
 // ══════════════════════════════════════════════════════
 // CONFIG — replace with your Supabase project values
@@ -1562,6 +1562,7 @@ function buildPrompt(topic) {
 // INIT
 // ══════════════════════════════════════════════════════
 let isLoggingIn = false;
+let loginComplete = false;
 
 async function init() {
   // Setup auth state listener
@@ -1590,6 +1591,7 @@ async function onLogin(user) {
   }
   
   isLoggingIn = true;
+  loginComplete = false;
   console.log('✓ Starting login process...');
   
   try {
@@ -1597,6 +1599,27 @@ async function onLogin(user) {
     document.getElementById('auth-screen').style.display = 'none';
     document.getElementById('app').style.display = 'grid';
     document.getElementById('user-email-label').textContent = user.email;
+    
+    // Show loading overlay
+    let loadingOverlay = document.createElement('div');
+    loadingOverlay.id = 'loading-overlay';
+    loadingOverlay.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(255,255,255,0.9);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+      font-family: 'Geist Mono', monospace;
+      font-size: 14px;
+      color: var(--ink2);
+    `;
+    loadingOverlay.textContent = 'Loading data...';
+    document.body.appendChild(loadingOverlay);
   
   // Check admin status
   const { data: adminCheck } = await sb
@@ -1635,8 +1658,21 @@ async function onLogin(user) {
   console.log('✓ Showing home...');
   showHome();
   console.log('✓ Login complete!');
+  loginComplete = true;
+  
+  // Remove loading overlay
+  loadingOverlay = document.getElementById('loading-overlay');
+  if (loadingOverlay) {
+    loadingOverlay.remove();
+  }
   } catch (err) {
     console.error('❌ Error during login:', err);
+    loginComplete = false;
+    // Remove loading overlay on error
+    loadingOverlay = document.getElementById('loading-overlay');
+    if (loadingOverlay) {
+      loadingOverlay.remove();
+    }
   } finally {
     isLoggingIn = false;
     console.log('✓ isLoggingIn reset to false');
@@ -1647,6 +1683,7 @@ function onLogout() {
   currentUser = null;
   topics = [];
   isLoggingIn = false;
+  loginComplete = false;
   document.getElementById('app').style.display = 'none';
   document.getElementById('auth-screen').style.display = 'flex';
 }
@@ -2246,6 +2283,14 @@ function openEditTopic() {
 
 async function saveTopic() {
   console.log('=== saveTopic called ===');
+  console.log('loginComplete:', loginComplete);
+  
+  if (!loginComplete) {
+    console.warn('⚠️ Login not complete yet, waiting...');
+    toast('Please wait for app to finish loading...');
+    return;
+  }
+  
   const name = document.getElementById('mt-name').value.trim();
   if (!name) { toast('Topic name required'); return; }
   
