@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Português — Learning Journal</title>
-<!-- VERSION: v8.9.0 | Build: 2026-03-26 | Fix: loader on tab switch (token refresh) -->
+<!-- VERSION: v9.0.0 | Build: 2026-03-26 | Major: refactoring + fix final exam unlock logic -->
 <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;1,400&family=Geist+Mono:wght@300;400;500&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <style>
@@ -980,10 +980,10 @@ main{padding:2.5rem 3rem;max-width:760px;}
 // ══════════════════════════════════════════════════════
 // VERSION INFO
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v8.9.0';
+const APP_VERSION = 'v9.0.0';
 const BUILD_DATE = '2026-03-26';
 console.log(`%c🇵🇹 Portuguese Learning Journal ${APP_VERSION}`, 'font-weight: bold; font-size: 14px; color: #2a6b3f;');
-console.log(`Build: ${BUILD_DATE} | Final fix for auth lock warning`);
+console.log(`Build: ${BUILD_DATE} | Refactoring + final exam unlock fix`);
 
 // ══════════════════════════════════════════════════════
 // CONFIG — replace with your Supabase project values
@@ -995,20 +995,69 @@ const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // ══════════════════════════════════════════════════════
-// STATE
+// CONSTANTS
 // ══════════════════════════════════════════════════════
+const EXERCISE_CONFIG = {
+  MIN_QUESTIONS: 5,
+  MAX_QUESTIONS: 7,
+  DEBOUNCE_DELAY: 300
+};
+
+const PROGRESS_THRESHOLDS = {
+  MIN_FOR_COMPLETION: 3,
+  EXAM_UNLOCK_PERCENTAGE: 70
+};
+
+const STORAGE_KEYS = {
+  EXERCISE_PREFIX: 'exercise_',
+  OVERVIEW_PREFIX: 'overview_'
+};
+
+const UI_MESSAGES = {
+  LOADING: 'Loading data...',
+  GENERATING: 'Generating exercise...',
+  GRADING: 'Grading answers...',
+  ERROR_GENERIC: 'An error occurred. Please try again.'
+};
+
+// ══════════════════════════════════════════════════════
+// STATE MANAGEMENT
+// ══════════════════════════════════════════════════════
+/** @type {Object|null} Current authenticated user */
 let currentUser = null;
-let topics = [];          // cached array of topic objects with .vocab[], .errors[], .exercises[]
+
+/** @type {Array<Object>} Cached topics with vocab, errors, exercises */
+let topics = [];
+
+/** @type {string|null} Currently selected topic ID */
 let currentTopicId = null;
+
+/** @type {Object|null} Current exercise data */
 let currentExercise = null;
+
+/** @type {Object} User answers for current exercise {questionId: answer} */
 let currentAnswers = {};
+
+/** @type {boolean} Whether current exercise is graded */
 let graded = false;
-let isAdmin = false;      // Admin status
-let systemPrompts = {};   // Loaded from DB
-let topicPrompts = [];    // Loaded from DB (topic_prompts table)
-let globalApiKey = null;  // Global API key (for all users)
-let finalExams = [];      // Final exams data (one per unit)
-let examPrompts = [];     // Exam generation prompts (one per unit)
+
+/** @type {boolean} Whether current user is admin */
+let isAdmin = false;
+
+/** @type {Object} System prompts loaded from DB */
+let systemPrompts = {};
+
+/** @type {Array<Object>} Topic prompts from topic_prompts table */
+let topicPrompts = [];
+
+/** @type {string|null} Global OpenAI API key */
+let globalApiKey = null;
+
+/** @type {Array<Object>} Final exams data (one per unit) */
+let finalExams = [];
+
+/** @type {Array<Object>} Exam generation prompts (one per unit) */
+let examPrompts = [];
 
 // ══════════════════════════════════════════════════════
 // JSON SCHEMAS
@@ -1250,6 +1299,70 @@ const GRADING_SCHEMA = {
     }
   }
 };
+
+// ══════════════════════════════════════════════════════
+// UI HELPERS
+// ══════════════════════════════════════════════════════
+/**
+ * Set button loading state
+ * @param {HTMLElement} button - Button element
+ * @param {boolean} loading - Loading state
+ * @param {string} [loadingText='Loading...'] - Text to show during loading
+ */
+function setButtonLoading(button, loading, loadingText = 'Loading...') {
+  if (!button) return;
+  
+  if (loading) {
+    button.disabled = true;
+    button.dataset.originalText = button.textContent;
+    button.textContent = loadingText;
+  } else {
+    button.disabled = false;
+    button.textContent = button.dataset.originalText || button.textContent;
+  }
+}
+
+/**
+ * Set status message with optional loading state
+ * @param {HTMLElement} statusEl - Status element
+ * @param {string} message - Status message
+ * @param {boolean} [isLoading=false] - Whether to show loading state
+ */
+function setStatus(statusEl, message, isLoading = false) {
+  if (!statusEl) return;
+  
+  statusEl.textContent = message;
+  if (isLoading) {
+    statusEl.classList.add('loading');
+  } else {
+    statusEl.classList.remove('loading');
+  }
+}
+
+/**
+ * Clear element content
+ * @param {string|HTMLElement} elementOrId - Element or ID
+ */
+function clearElement(elementOrId) {
+  const el = typeof elementOrId === 'string' 
+    ? document.getElementById(elementOrId) 
+    : elementOrId;
+  if (el) el.innerHTML = '';
+}
+
+/**
+ * Show toast notification
+ * @param {string} message - Message to display
+ * @param {number} [duration=2500] - Duration in ms
+ */
+function toast(message, duration = 2500) {
+  const el = document.getElementById('toast');
+  if (!el) return;
+  
+  el.textContent = message;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), duration);
+}
 
 // ══════════════════════════════════════════════════════
 // API UTILITIES
@@ -1904,14 +2017,8 @@ function setSyncStatus(msg) {
 }
 
 // ══════════════════════════════════════════════════════
-// TOAST / UTILS
+// MODAL UTILITIES
 // ══════════════════════════════════════════════════════
-function toast(msg) {
-  const t = document.getElementById('toast');
-  t.textContent = msg; t.classList.add('show');
-  setTimeout(() => t.classList.remove('show'), 2200);
-}
-
 function openModal(id) { document.getElementById(id).classList.add('open'); }
 function closeModal(id) { document.getElementById(id).classList.remove('open'); }
 document.querySelectorAll('.modal-overlay').forEach(m => {
@@ -4398,7 +4505,7 @@ function showTopicDetail(topicId) {
 
 /**
  * Check if a unit is ready for final exam
- * Unit is ready when all topics have at least 1 exercise with 100% score
+ * Unit is ready when all topics have at least 1 exercise with 0 errors
  */
 function isUnitReadyForExam(unitNumber) {
   const unitName = `Unidade ${unitNumber}`;
@@ -4420,12 +4527,12 @@ function isUnitReadyForExam(unitNumber) {
       };
     }
     
-    // All exercises must be 100%
-    const hasNonPerfect = topic.exercises.some(ex => ex.score !== 100);
-    if (hasNonPerfect) {
+    // At least one exercise must have 0 errors (perfect score)
+    const hasPerfect = topic.exercises.some(ex => ex.error_count === 0);
+    if (!hasPerfect) {
       return { 
         ready: false, 
-        reason: `${topic.name} has exercises below 100%`,
+        reason: `${topic.name} has no exercises with 0 errors`,
         missingTopic: topic.name
       };
     }
