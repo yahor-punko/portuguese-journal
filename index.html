@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Português — Learning Journal</title>
-<!-- VERSION: v8.8.3 | Build: 2026-03-26 | Fixed Check button not working -->
+<!-- VERSION: v8.8.4 | Build: 2026-03-26 | Debug: auth listener + button logging -->
 <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;1,400&family=Geist+Mono:wght@300;400;500&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <style>
@@ -980,10 +980,10 @@ main{padding:2.5rem 3rem;max-width:760px;}
 // ══════════════════════════════════════════════════════
 // VERSION INFO
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v8.8.3';
+const APP_VERSION = 'v8.8.4';
 const BUILD_DATE = '2026-03-26';
 console.log(`%c🇵🇹 Portuguese Learning Journal ${APP_VERSION}`, 'font-weight: bold; font-size: 14px; color: #2a6b3f;');
-console.log(`Build: ${BUILD_DATE} | Fixed Check button not working`);
+console.log(`Build: ${BUILD_DATE} | Debug: auth listener + button logging`);
 
 // ══════════════════════════════════════════════════════
 // CONFIG — replace with your Supabase project values
@@ -1562,16 +1562,23 @@ function buildPrompt(topic) {
 // INIT
 // ══════════════════════════════════════════════════════
 let isLoggingIn = false;
+let authListenerSet = false;
 
 async function init() {
+  // Setup auth state listener (only once)
+  if (!authListenerSet) {
+    sb.auth.onAuthStateChange(async (_event, session) => {
+      if (session) await onLogin(session.user);
+      else onLogout();
+    });
+    authListenerSet = true;
+  }
+  
+  // Check current session
   const { data: { session } } = await sb.auth.getSession();
   if (session) {
     await onLogin(session.user);
   }
-  sb.auth.onAuthStateChange(async (_event, session) => {
-    if (session) await onLogin(session.user);
-    else onLogout();
-  });
 }
 
 async function onLogin(user) {
@@ -3872,8 +3879,13 @@ function renderExercise() {
 // GRADING
 // ══════════════════════════════════════════════════════
 async function submitExercise() {
+  console.log('=== submitExercise called ===');
+  console.log('currentExercise:', !!currentExercise);
+  console.log('graded:', graded);
+  console.log('currentTopicId:', currentTopicId);
+  
   if (!currentExercise || graded) {
-    console.log('Submit blocked: graded =', graded, '| currentExercise =', !!currentExercise);
+    console.log('❌ Submit blocked: graded =', graded, '| currentExercise =', !!currentExercise);
     return;
   }
   
