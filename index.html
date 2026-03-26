@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Português — Learning Journal</title>
-<!-- VERSION: v8.7.1 | Build: 2026-03-26 | Fixed content refresh & mobile overflow -->
+<!-- VERSION: v8.8 | Build: 2026-03-26 | Final Exams feature complete -->
 <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;1,400&family=Geist+Mono:wght@300;400;500&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <style>
@@ -56,6 +56,56 @@ aside{background:var(--white);border-right:1px solid var(--line);display:flex;fl
 .foot-btn{width:100%;display:flex;align-items:center;gap:8px;padding:6px 10px;border:none;background:none;font-family:'Geist Mono',monospace;font-size:11px;color:var(--ink3);text-align:left;cursor:pointer;border-radius:4px;transition:all .15s;}
 .foot-btn:hover{background:var(--bg);color:var(--ink);}
 .foot-btn.active{color:var(--ink);background:var(--bg);}
+
+/* Sidebar unit headers */
+.sidebar-unit-header{
+  font-family:'Geist Mono',monospace;
+  font-size:9px;
+  letter-spacing:.14em;
+  color:var(--ink4);
+  text-transform:uppercase;
+  padding:1rem .5rem .3rem;
+  display:flex;
+  align-items:center;
+  gap:6px;
+}
+.sidebar-unit-header:first-child{padding-top:.5rem;}
+
+/* Final exam badges */
+.final-exam-badge{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width:18px;
+  height:18px;
+  border-radius:50%;
+  font-size:11px;
+  cursor:pointer;
+  transition:all .2s;
+  line-height:1;
+}
+.final-exam-badge.ready{
+  background:var(--blue-bg);
+  border:1px solid var(--blue);
+  animation:pulse 2s infinite;
+}
+.final-exam-badge.available{
+  background:var(--green-bg);
+  border:1px solid var(--green-line);
+}
+.final-exam-badge.passed{
+  background:var(--green);
+  color:var(--white);
+  border:1px solid var(--green);
+}
+.final-exam-badge:hover{
+  transform:scale(1.15);
+}
+
+@keyframes pulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.1); opacity: 0.8; }
+}
 
 main{padding:2.5rem 3rem;max-width:760px;}
 .view{display:none;}
@@ -297,6 +347,107 @@ main{padding:2.5rem 3rem;max-width:760px;}
   font-weight: 500;
   margin-left: 8px;
 }
+
+/* Exam Prompt Cards */
+.exam-prompt-card {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 1.25rem;
+  background: var(--white);
+  transition: border-color 0.2s;
+}
+.exam-prompt-card:hover {
+  border-color: var(--blue);
+}
+
+/* Final Exam UI */
+.exam-question {
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+  transition: border-color 0.2s;
+}
+.exam-question:hover {
+  border-color: var(--ink4);
+}
+.exam-q-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--line);
+}
+.exam-q-number {
+  font-family: 'Geist Mono', monospace;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--ink1);
+  letter-spacing: 0.05em;
+}
+.exam-q-type {
+  font-family: 'Geist Mono', monospace;
+  font-size: 10px;
+  color: var(--ink3);
+  background: var(--bg);
+  padding: 2px 8px;
+  border-radius: 3px;
+  text-transform: uppercase;
+}
+.exam-q-text {
+  font-size: 16px;
+  line-height: 1.6;
+  color: var(--ink1);
+  margin-bottom: 1.25rem;
+}
+.exam-q-input {
+  margin-top: 1rem;
+}
+.exam-answer-input {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 0.75rem 1rem;
+  font-family: 'EB Garamond', serif;
+  font-size: 16px;
+  color: var(--ink);
+  outline: none;
+  transition: border-color 0.2s;
+}
+.exam-answer-input:focus {
+  border-color: var(--green);
+}
+.exam-choice-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  margin-bottom: 0.5rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.exam-choice-option:hover {
+  background: var(--bg);
+  border-color: var(--ink4);
+}
+.exam-choice-option input[type="radio"] {
+  margin-top: 0.25rem;
+  cursor: pointer;
+}
+.exam-choice-option:has(input:checked) {
+  background: var(--green-bg);
+  border-color: var(--green);
+}
+.exam-choice-option span {
+  flex: 1;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--ink1);
+}
 </style>
 </head>
 <body>
@@ -496,6 +647,7 @@ main{padding:2.5rem 3rem;max-width:760px;}
       <button class="tab-btn active" onclick="switchAdminTab('api', event.target)">API Settings</button>
       <button class="tab-btn" onclick="switchAdminTab('prompts', event.target)">System Prompts</button>
       <button class="tab-btn" onclick="switchAdminTab('topics', event.target)">Topic Prompts</button>
+      <button class="tab-btn" onclick="switchAdminTab('exams', event.target)">Exam Prompts</button>
     </div>
     
     <!-- API SETTINGS TAB -->
@@ -644,6 +796,63 @@ main{padding:2.5rem 3rem;max-width:760px;}
         </div>
       </div>
     </div>
+    
+    <!-- EXAM PROMPTS TAB -->
+    <div id="admin-tab-exams" class="tab-panel">
+      <div class="settings-section">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
+          <div class="settings-title">Final Exam Prompts</div>
+          <button class="btn" onclick="openAddExamPrompt()">+ Add Exam Prompt</button>
+        </div>
+        
+        <p style="font-size:14px;color:var(--ink2);margin-bottom:1.5rem;">
+          These prompts control how final exams are generated for each unit. Each unit should have one exam prompt.
+        </p>
+        
+        <div id="exam-prompts-list" style="display:flex;flex-direction:column;gap:12px;">
+          <div style="color:var(--ink3);text-align:center;padding:2rem;">Loading exam prompts...</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- FINAL EXAM VIEW -->
+  <div id="view-final-exam" class="view">
+    <button class="back-btn" onclick="showHome()">← Back to topics</button>
+    
+    <div class="view-head">
+      <h1>🎓 <span id="exam-unit-name">Final Exam</span></h1>
+      <p id="exam-meta">20 questions · Attempt #1</p>
+    </div>
+    
+    <div style="background:var(--blue-bg);border:1px solid var(--blue);padding:1rem;border-radius:4px;margin-bottom:2rem;">
+      <div style="font-family:'Geist Mono',monospace;font-size:11px;color:var(--blue);margin-bottom:0.5rem;">INSTRUCTIONS</div>
+      <ul style="font-size:14px;color:var(--ink2);margin-left:1.5rem;line-height:1.8;">
+        <li>Answer all questions to the best of your ability</li>
+        <li>You can retake the exam unlimited times</li>
+        <li>Your best score will be saved</li>
+        <li>Passing grade: 80% or higher</li>
+      </ul>
+    </div>
+    
+    <div id="exam-progress" style="margin-bottom:2rem;">
+      <div style="display:flex;justify-content:space-between;font-family:'Geist Mono',monospace;font-size:11px;color:var(--ink3);margin-bottom:0.5rem;">
+        <span>Progress</span>
+        <span id="exam-progress-text">0 / 20</span>
+      </div>
+      <div style="height:6px;background:var(--line);border-radius:3px;overflow:hidden;">
+        <div id="exam-progress-bar" style="height:100%;background:var(--green);width:0%;transition:width 0.3s;"></div>
+      </div>
+    </div>
+    
+    <div id="exam-questions"></div>
+    
+    <div style="margin-top:2.5rem;padding-top:1.5rem;border-top:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;">
+      <div id="exam-completion-status" style="font-family:'Geist Mono',monospace;font-size:12px;color:var(--ink3);"></div>
+      <button class="btn" id="exam-submit-btn" onclick="submitFinalExamAnswers()" disabled>
+        Submit Exam
+      </button>
+    </div>
   </div>
 </main>
 </div>
@@ -697,6 +906,52 @@ main{padding:2.5rem 3rem;max-width:760px;}
   </div>
 </div>
 
+<!-- ADD/EDIT EXAM PROMPT MODAL -->
+<div class="modal-overlay" id="modal-exam-prompt">
+  <div class="modal" style="max-width:800px;">
+    <h2 id="modal-exam-prompt-title">Add Exam Prompt</h2>
+    
+    <div class="field">
+      <label>Unit <span style="color:var(--red);">*</span></label>
+      <select id="mep-unit">
+        <option value="unit1">Unidade 1</option>
+        <option value="unit2">Unidade 2</option>
+        <option value="unit3">Unidade 3</option>
+        <option value="unit4">Unidade 4</option>
+        <option value="unit5">Unidade 5</option>
+        <option value="unit6">Unidade 6</option>
+        <option value="unit7">Unidade 7</option>
+        <option value="unit8">Unidade 8</option>
+        <option value="unit9">Unidade 9</option>
+        <option value="unit10">Unidade 10</option>
+      </select>
+    </div>
+    
+    <div class="field">
+      <label>Description</label>
+      <input type="text" id="mep-description" placeholder="Personal identification, basic grammar (SER, TER, -AR verbs)">
+    </div>
+    
+    <div class="field">
+      <label>Prompt Content <span style="color:var(--red);">*</span></label>
+      <textarea id="mep-content" rows="20" placeholder="This is a final unit test..."></textarea>
+      <div style="margin-top:0.5rem;font-size:12px;color:var(--ink3);">
+        This prompt will be used to generate the final exam for this unit.
+      </div>
+    </div>
+    
+    <div class="field" style="display:flex;align-items:center;gap:10px;">
+      <input type="checkbox" id="mep-active" checked>
+      <label for="mep-active" style="margin:0;cursor:pointer;">Active</label>
+    </div>
+    
+    <div class="modal-actions">
+      <button class="btn secondary" onclick="closeExamPromptModal()">Cancel</button>
+      <button class="btn" onclick="saveExamPrompt()">Save Exam Prompt</button>
+    </div>
+  </div>
+</div>
+
 <!-- ADD/EDIT TOPIC MODAL -->
 <div class="modal-overlay" id="modal-topic">
   <div class="modal">
@@ -725,10 +980,10 @@ main{padding:2.5rem 3rem;max-width:760px;}
 // ══════════════════════════════════════════════════════
 // VERSION INFO
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v8.7.1';
+const APP_VERSION = 'v8.8';
 const BUILD_DATE = '2026-03-26';
 console.log(`%c🇵🇹 Portuguese Learning Journal ${APP_VERSION}`, 'font-weight: bold; font-size: 14px; color: #2a6b3f;');
-console.log(`Build: ${BUILD_DATE} | Fixed content refresh & mobile overflow`);
+console.log(`Build: ${BUILD_DATE} | Final Exams feature complete`);
 
 // ══════════════════════════════════════════════════════
 // CONFIG — replace with your Supabase project values
@@ -752,6 +1007,8 @@ let isAdmin = false;      // Admin status
 let systemPrompts = {};   // Loaded from DB
 let topicPrompts = [];    // Loaded from DB (topic_prompts table)
 let globalApiKey = null;  // Global API key (for all users)
+let finalExams = [];      // Final exams data (one per unit)
+let examPrompts = [];     // Exam generation prompts (one per unit)
 
 // ══════════════════════════════════════════════════════
 // JSON SCHEMAS
@@ -1339,8 +1596,14 @@ async function onLogin(user) {
   // Load topic prompts from DB
   await loadTopicPrompts();
   
+  // Load exam prompts from DB
+  await loadExamPrompts();
+  
   // Load global API key
   await loadGlobalApiKey();
+  
+  // Load final exams
+  await loadFinalExams();
   
   await loadAllData();
   showHome();
@@ -1475,6 +1738,37 @@ async function loadTopicPrompts() {
   
   topicPrompts = prompts || [];
   console.log('Topic prompts loaded:', topicPrompts.length);
+}
+
+async function loadExamPrompts() {
+  const { data: prompts, error } = await sb
+    .from('exam_prompts')
+    .select('*')
+    .eq('is_active', true)
+    .order('unit_key', { ascending: true });
+  
+  if (error) {
+    console.error('Error loading exam prompts:', error);
+    return;
+  }
+  
+  examPrompts = prompts || [];
+  console.log('Exam prompts loaded:', examPrompts.length);
+}
+
+async function loadFinalExams() {
+  const { data: exams, error } = await sb
+    .from('final_exams')
+    .select('*')
+    .eq('user_id', currentUser.id);
+  
+  if (error) {
+    console.error('Error loading final exams:', error);
+    return;
+  }
+  
+  finalExams = exams || [];
+  console.log('Final exams loaded:', finalExams.length);
 }
 
 async function loadAllData() {
@@ -1695,16 +1989,74 @@ function computeProgress(t) {
 // ══════════════════════════════════════════════════════
 function renderSidebarTopics() {
   const el = document.getElementById('sidebar-topics');
-  el.innerHTML = topics.map(t => {
-    const pct = computeProgress(t);
-    const active = t.id === currentTopicId ? ' active' : '';
-    const pillClass = pct === 100 ? ' done' : '';
-    return `<button class="nav-btn${active}" onclick="showTopicDetail(${t.id})" style="position:relative;padding-right:32px;">
-      <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left">${t.name}</span>
-      <span class="progress-pill${pillClass}">${pct}%</span>
-      <span onclick="event.stopPropagation();deleteTopic(${t.id},'${t.name.replace(/'/g,"\\'")}');" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);opacity:0;transition:opacity .15s;color:var(--red);cursor:pointer;font-size:18px;line-height:1;padding:2px 4px;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.6'" class="delete-topic-btn">×</span>
-    </button>`;
-  }).join('');
+  
+  if (topics.length === 0) {
+    el.innerHTML = '';
+    return;
+  }
+  
+  // Group topics by unit
+  const grouped = {};
+  topics.forEach(t => {
+    const unitKey = t.unit || 'Other';
+    if (!grouped[unitKey]) grouped[unitKey] = [];
+    grouped[unitKey].push(t);
+  });
+  
+  // Sort unit keys (Unidade 1, Unidade 2, ...)
+  const sortedUnits = Object.keys(grouped).sort((a, b) => {
+    if (a === 'Other') return 1;
+    if (b === 'Other') return -1;
+    const aNum = parseInt(a.match(/\d+/)?.[0] || '999');
+    const bNum = parseInt(b.match(/\d+/)?.[0] || '999');
+    return aNum - bNum;
+  });
+  
+  let html = '';
+  
+  sortedUnits.forEach(unitKey => {
+    const unitTopics = grouped[unitKey];
+    
+    // Check if unit is ready for final exam
+    const unitMatch = unitKey.match(/Unidade (\d+)/);
+    let examBadge = '';
+    
+    if (unitMatch) {
+      const unitNumber = parseInt(unitMatch[1]);
+      const readiness = isUnitReadyForExam(unitNumber);
+      const exam = getFinalExam(`unit${unitNumber}`);
+      
+      if (readiness.ready) {
+        if (exam && exam.best_score >= 80) {
+          // Passed
+          examBadge = ` <span class="final-exam-badge passed" onclick="event.stopPropagation();startFinalExam(${unitNumber})" title="Final Exam: ${exam.best_score}%">🎓</span>`;
+        } else if (exam) {
+          // Generated but not passed
+          examBadge = ` <span class="final-exam-badge available" onclick="event.stopPropagation();startFinalExam(${unitNumber})" title="Final Exam Available (${exam.attempts} attempts)">🎓</span>`;
+        } else {
+          // Ready but not generated
+          examBadge = ` <span class="final-exam-badge ready" onclick="event.stopPropagation();startFinalExam(${unitNumber})" title="Final Exam Available">🎓</span>`;
+        }
+      }
+    }
+    
+    // Unit header
+    html += `<div class="sidebar-unit-header">${unitKey}${examBadge}</div>`;
+    
+    // Topics in this unit
+    unitTopics.forEach(t => {
+      const pct = computeProgress(t);
+      const active = t.id === currentTopicId ? ' active' : '';
+      const pillClass = pct === 100 ? ' done' : '';
+      html += `<button class="nav-btn${active}" onclick="showTopicDetail(${t.id})" style="position:relative;padding-right:32px;">
+        <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left">${t.name}</span>
+        <span class="progress-pill${pillClass}">${pct}%</span>
+        <span onclick="event.stopPropagation();deleteTopic(${t.id},'${t.name.replace(/'/g,"\\'")}');" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);opacity:0;transition:opacity .15s;color:var(--red);cursor:pointer;font-size:18px;line-height:1;padding:2px 4px;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.6'" class="delete-topic-btn">×</span>
+      </button>`;
+    });
+  });
+  
+  el.innerHTML = html;
 }
 
 // ══════════════════════════════════════════════════════
@@ -2403,6 +2755,11 @@ function switchAdminTab(tab, btn) {
   if (tab === 'topics') {
     renderTopicPromptsAdmin();
   }
+  
+  // Load exam prompts when switching to exams tab
+  if (tab === 'exams') {
+    renderExamPromptsAdmin();
+  }
 }
 
 // ══════════════════════════════════════════════════════
@@ -2684,6 +3041,206 @@ async function deleteTopicPrompt(id, name) {
 function closeTopicPromptModal() {
   document.getElementById('modal-topic-prompt').classList.remove('open');
   currentEditingPromptId = null;
+}
+
+// ══════════════════════════════════════════════════════
+// EXAM PROMPTS ADMIN FUNCTIONS
+// ══════════════════════════════════════════════════════
+
+let currentEditingExamPromptId = null;
+
+/**
+ * Render exam prompts list in admin panel
+ */
+async function renderExamPromptsAdmin() {
+  const container = document.getElementById('exam-prompts-list');
+  
+  if (!container) return;
+  
+  container.innerHTML = '<div style="color:var(--ink3);text-align:center;padding:2rem;">Loading exam prompts...</div>';
+  
+  try {
+    const { data, error } = await sb
+      .from('exam_prompts')
+      .select('*')
+      .order('unit_key', { ascending: true });
+    
+    if (error) throw error;
+    
+    if (!data || data.length === 0) {
+      container.innerHTML = '<div style="color:var(--ink3);text-align:center;padding:2rem;">No exam prompts found. Click "+ Add Exam Prompt" to create one.</div>';
+      return;
+    }
+    
+    // Render cards
+    container.innerHTML = data.map(prompt => `
+      <div class="exam-prompt-card">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:0.75rem;">
+          <div>
+            <div style="font-family:'EB Garamond',serif;font-size:18px;font-weight:500;color:var(--ink1);">
+              ${escapeHtml(prompt.unit_name)}
+              ${prompt.is_active ? '<span style="display:inline-block;padding:2px 6px;background:var(--green);color:white;border-radius:3px;font-size:10px;margin-left:8px;">ACTIVE</span>' : ''}
+            </div>
+            <div style="font-size:12px;color:var(--ink3);margin-top:0.25rem;">
+              ${prompt.description || 'No description'}
+            </div>
+          </div>
+        </div>
+        <div style="font-size:14px;color:var(--ink2);line-height:1.6;margin-bottom:0.75rem;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;">
+          ${escapeHtml(prompt.prompt_content)}
+        </div>
+        <div style="display:flex;gap:8px;margin-top:0.75rem;">
+          <button class="btn secondary" onclick="editExamPrompt(${prompt.id})">Edit</button>
+          <button class="btn secondary" style="color:var(--red);" onclick="deleteExamPrompt(${prompt.id}, '${escapeHtml(prompt.unit_name).replace(/'/g, "\\'")}')">Delete</button>
+        </div>
+      </div>
+    `).join('');
+    
+  } catch (err) {
+    console.error('Error loading exam prompts:', err);
+    container.innerHTML = '<div style="color:var(--red);text-align:center;padding:2rem;">Error loading exam prompts. Check console.</div>';
+  }
+}
+
+/**
+ * Open modal to add new exam prompt
+ */
+function openAddExamPrompt() {
+  currentEditingExamPromptId = null;
+  document.getElementById('modal-exam-prompt-title').textContent = 'Add Exam Prompt';
+  document.getElementById('mep-unit').value = 'unit1';
+  document.getElementById('mep-description').value = '';
+  document.getElementById('mep-content').value = '';
+  document.getElementById('mep-active').checked = true;
+  document.getElementById('modal-exam-prompt').classList.add('open');
+}
+
+/**
+ * Edit existing exam prompt
+ */
+async function editExamPrompt(id) {
+  try {
+    const { data, error } = await sb
+      .from('exam_prompts')
+      .select('*')
+      .eq('id', id)
+      .single();
+    
+    if (error) throw error;
+    
+    currentEditingExamPromptId = id;
+    document.getElementById('modal-exam-prompt-title').textContent = 'Edit Exam Prompt';
+    document.getElementById('mep-unit').value = data.unit_key;
+    document.getElementById('mep-description').value = data.description || '';
+    document.getElementById('mep-content').value = data.prompt_content;
+    document.getElementById('mep-active').checked = data.is_active;
+    document.getElementById('modal-exam-prompt').classList.add('open');
+    
+  } catch (err) {
+    console.error('Error loading exam prompt:', err);
+    alert('Error loading prompt. Check console.');
+  }
+}
+
+/**
+ * Save exam prompt (create or update)
+ */
+async function saveExamPrompt() {
+  const unitKey = document.getElementById('mep-unit').value;
+  const description = document.getElementById('mep-description').value.trim();
+  const content = document.getElementById('mep-content').value.trim();
+  const isActive = document.getElementById('mep-active').checked;
+  
+  if (!content) {
+    alert('Prompt content is required');
+    return;
+  }
+  
+  // Get unit name from unit key
+  const unitNumber = unitKey.replace('unit', '');
+  const unitName = `Unidade ${unitNumber}`;
+  
+  try {
+    const promptData = {
+      unit_key: unitKey,
+      unit_name: unitName,
+      prompt_content: content,
+      description: description || null,
+      is_active: isActive,
+      updated_at: new Date().toISOString()
+    };
+    
+    if (currentEditingExamPromptId) {
+      // Update existing prompt
+      const { error } = await sb
+        .from('exam_prompts')
+        .update(promptData)
+        .eq('id', currentEditingExamPromptId);
+      
+      if (error) throw error;
+      
+      console.log('Exam prompt updated:', currentEditingExamPromptId);
+    } else {
+      // Create new prompt
+      const { error } = await sb
+        .from('exam_prompts')
+        .insert(promptData);
+      
+      if (error) throw error;
+      
+      console.log('Exam prompt created');
+    }
+    
+    closeExamPromptModal();
+    
+    // Reload prompts
+    await loadExamPrompts();
+    await renderExamPromptsAdmin();
+    
+    alert(currentEditingExamPromptId ? 'Exam prompt updated!' : 'Exam prompt created!');
+    
+  } catch (err) {
+    console.error('Error saving exam prompt:', err);
+    alert('Error saving prompt: ' + err.message);
+  }
+}
+
+/**
+ * Delete exam prompt
+ */
+async function deleteExamPrompt(id, unitName) {
+  if (!confirm(`Delete exam prompt for "${unitName}"?\n\nThis cannot be undone.`)) {
+    return;
+  }
+  
+  try {
+    const { error } = await sb
+      .from('exam_prompts')
+      .delete()
+      .eq('id', id);
+    
+    if (error) throw error;
+    
+    console.log('Exam prompt deleted:', id);
+    
+    // Reload prompts
+    await loadExamPrompts();
+    await renderExamPromptsAdmin();
+    
+    alert('Exam prompt deleted!');
+    
+  } catch (err) {
+    console.error('Error deleting exam prompt:', err);
+    alert('Error deleting prompt: ' + err.message);
+  }
+}
+
+/**
+ * Close exam prompt modal
+ */
+function closeExamPromptModal() {
+  document.getElementById('modal-exam-prompt').classList.remove('open');
+  currentEditingExamPromptId = null;
 }
 
 /**
@@ -3608,6 +4165,558 @@ function showTopicDetail(topicId) {
     if (tabId === 'tab-errors') renderErrors();
     if (tabId === 'tab-prompt') loadTopicPrompt();
   }
+}
+
+// ══════════════════════════════════════════════════════
+// FINAL EXAMS
+// ══════════════════════════════════════════════════════
+
+/**
+ * Check if a unit is ready for final exam
+ * Unit is ready when all topics have at least 1 exercise with 100% score
+ */
+function isUnitReadyForExam(unitNumber) {
+  const unitName = `Unidade ${unitNumber}`;
+  const unitTopics = topics.filter(t => 
+    t.unit && t.unit.toLowerCase().includes(unitName.toLowerCase())
+  );
+  
+  if (unitTopics.length === 0) {
+    return { ready: false, reason: `No topics found for ${unitName}` };
+  }
+  
+  for (const topic of unitTopics) {
+    // Topic must have at least one exercise
+    if (!topic.exercises || topic.exercises.length === 0) {
+      return { 
+        ready: false, 
+        reason: `${topic.name} has no exercises`,
+        missingTopic: topic.name
+      };
+    }
+    
+    // All exercises must be 100%
+    const hasNonPerfect = topic.exercises.some(ex => ex.score !== 100);
+    if (hasNonPerfect) {
+      return { 
+        ready: false, 
+        reason: `${topic.name} has exercises below 100%`,
+        missingTopic: topic.name
+      };
+    }
+  }
+  
+  return { 
+    ready: true, 
+    topics: unitTopics,
+    topicCount: unitTopics.length
+  };
+}
+
+/**
+ * Get final exam for a unit (or null if doesn't exist)
+ */
+function getFinalExam(unitKey) {
+  return finalExams.find(exam => exam.unit_key === unitKey);
+}
+
+/**
+ * Start final exam flow
+ */
+async function startFinalExam(unitNumber) {
+  const unitKey = `unit${unitNumber}`;
+  const unitName = `Unidade ${unitNumber}`;
+  
+  // Check if unit is ready
+  const readiness = isUnitReadyForExam(unitNumber);
+  if (!readiness.ready) {
+    alert(`Unit not ready for final exam:\n${readiness.reason}`);
+    return;
+  }
+  
+  // Check if exam already exists
+  let exam = getFinalExam(unitKey);
+  
+  if (!exam) {
+    // Generate new exam
+    if (!confirm(`Generate Final Exam for ${unitName}?\n\nThis will create a comprehensive test with 15-20 questions covering all topics in this unit.\n\nThe exam will be saved and you can retake it unlimited times.`)) {
+      return;
+    }
+    
+    exam = await generateFinalExam(unitNumber, readiness.topics);
+    if (!exam) return; // Generation failed
+  }
+  
+  // Show exam taking UI
+  showFinalExamTaking(exam);
+}
+
+/**
+ * Generate final exam questions using AI
+ */
+async function generateFinalExam(unitNumber, unitTopics) {
+  const unitName = `Unidade ${unitNumber}`;
+  const unitKey = `unit${unitNumber}`;
+  
+  toast('Generating final exam...');
+  
+  // Get exam prompt from database
+  const examPrompt = examPrompts.find(p => p.unit_key === unitKey);
+  
+  if (!examPrompt) {
+    alert(`No exam prompt found for ${unitName}.\n\nPlease ask admin to create exam prompt in Admin Panel → Exam Prompts.`);
+    return null;
+  }
+  
+  // Use the exam prompt from database
+  const prompt = examPrompt.prompt_content;
+
+  try {
+    const response = await callOpenAI(prompt, 'default');
+    
+    if (!response || !response.items || response.items.length === 0) {
+      toast('Error: Invalid exam generated');
+      return null;
+    }
+    
+    // Save to database
+    const { data: examData, error } = await sb
+      .from('final_exams')
+      .insert({
+        user_id: currentUser.id,
+        unit_name: unitName,
+        unit_key: unitKey,
+        questions: response.items,
+        best_score: 0,
+        attempts: 0
+      })
+      .select()
+      .single();
+    
+    if (error) {
+      console.error('Error saving final exam:', error);
+      toast('Error saving exam');
+      return null;
+    }
+    
+    // Add to local cache
+    finalExams.push(examData);
+    
+    toast(`Final exam generated: ${response.items.length} questions`);
+    return examData;
+    
+  } catch (err) {
+    console.error('Error generating final exam:', err);
+    toast('Error generating exam');
+    return null;
+  }
+}
+
+/**
+ * Show final exam taking interface
+ */
+let currentExam = null;
+let currentExamAnswers = {};
+
+/**
+ * Show final exam taking interface
+ */
+function showFinalExamTaking(exam) {
+  currentExam = exam;
+  currentExamAnswers = {};
+  
+  showView('final-exam');
+  
+  // Set metadata
+  const attemptNum = exam.attempts + 1;
+  document.getElementById('exam-unit-name').textContent = `${exam.unit_name} — Final Exam`;
+  document.getElementById('exam-meta').textContent = `${exam.questions.length} questions · Attempt #${attemptNum}`;
+  
+  // Reset progress
+  updateExamProgress();
+  
+  // Render all questions
+  renderExamQuestions(exam.questions);
+}
+
+/**
+ * Render all exam questions
+ */
+function renderExamQuestions(questions) {
+  const container = document.getElementById('exam-questions');
+  
+  container.innerHTML = questions.map((q, idx) => renderExamQuestion(q, idx)).join('');
+  
+  // Add event listeners for progress tracking
+  container.addEventListener('input', updateExamProgress);
+  container.addEventListener('change', updateExamProgress);
+}
+
+/**
+ * Render single exam question
+ */
+function renderExamQuestion(question, index) {
+  const qNum = index + 1;
+  
+  let inputHTML = '';
+  
+  switch (question.type) {
+    case 'fill':
+      inputHTML = `<input type="text" 
+        class="exam-answer-input" 
+        id="exam-ans-${index}" 
+        placeholder="Your answer"
+        autocomplete="off"
+        spellcheck="false">`;
+      break;
+      
+    case 'translate':
+      inputHTML = `<input type="text" 
+        class="exam-answer-input" 
+        id="exam-ans-${index}" 
+        placeholder="Translate to Portuguese"
+        autocomplete="off"
+        spellcheck="false">`;
+      break;
+      
+    case 'choice':
+      inputHTML = question.options.map((opt, i) => {
+        const letter = opt.charAt(0); // "a)", "b)", "c)", "d)"
+        return `
+          <label class="exam-choice-option">
+            <input type="radio" name="exam-q-${index}" value="${letter}" id="exam-ans-${index}-${letter}">
+            <span>${opt}</span>
+          </label>
+        `;
+      }).join('');
+      break;
+      
+    case 'transform':
+      inputHTML = `<input type="text" 
+        class="exam-answer-input" 
+        id="exam-ans-${index}" 
+        placeholder="Transform the sentence"
+        autocomplete="off"
+        spellcheck="false">`;
+      break;
+      
+    case 'correct':
+      inputHTML = `<input type="text" 
+        class="exam-answer-input" 
+        id="exam-ans-${index}" 
+        placeholder="Corrected sentence"
+        autocomplete="off"
+        spellcheck="false">`;
+      break;
+      
+    default:
+      inputHTML = `<input type="text" class="exam-answer-input" id="exam-ans-${index}">`;
+  }
+  
+  return `
+    <div class="exam-question" data-index="${index}">
+      <div class="exam-q-header">
+        <span class="exam-q-number">Question ${qNum}</span>
+        <span class="exam-q-type">${question.type}</span>
+      </div>
+      <div class="exam-q-text">${question.question}</div>
+      <div class="exam-q-input">
+        ${inputHTML}
+      </div>
+    </div>
+  `;
+}
+
+/**
+ * Update exam progress indicator
+ */
+function updateExamProgress() {
+  const questions = currentExam.questions;
+  let answered = 0;
+  
+  questions.forEach((q, idx) => {
+    if (q.type === 'choice') {
+      const selected = document.querySelector(`input[name="exam-q-${idx}"]:checked`);
+      if (selected) answered++;
+    } else {
+      const input = document.getElementById(`exam-ans-${idx}`);
+      if (input && input.value.trim()) answered++;
+    }
+  });
+  
+  const total = questions.length;
+  const percent = Math.round((answered / total) * 100);
+  
+  document.getElementById('exam-progress-text').textContent = `${answered} / ${total}`;
+  document.getElementById('exam-progress-bar').style.width = `${percent}%`;
+  
+  // Update status text
+  const statusEl = document.getElementById('exam-completion-status');
+  if (answered === total) {
+    statusEl.textContent = '✓ All questions answered';
+    statusEl.style.color = 'var(--green)';
+    document.getElementById('exam-submit-btn').disabled = false;
+  } else {
+    statusEl.textContent = `${total - answered} question${total - answered !== 1 ? 's' : ''} remaining`;
+    statusEl.style.color = 'var(--ink3)';
+    document.getElementById('exam-submit-btn').disabled = true;
+  }
+}
+
+/**
+ * Collect all exam answers
+ */
+function collectExamAnswers() {
+  const answers = {};
+  
+  currentExam.questions.forEach((q, idx) => {
+    if (q.type === 'choice') {
+      const selected = document.querySelector(`input[name="exam-q-${idx}"]:checked`);
+      answers[idx] = selected ? selected.value : '';
+    } else {
+      const input = document.getElementById(`exam-ans-${idx}`);
+      answers[idx] = input ? input.value.trim() : '';
+    }
+  });
+  
+  return answers;
+}
+
+/**
+ * Submit final exam answers
+ */
+async function submitFinalExamAnswers() {
+  if (!currentExam) return;
+  
+  // Collect answers
+  const answers = collectExamAnswers();
+  
+  // Check all answered
+  const allAnswered = Object.values(answers).every(a => a !== '');
+  if (!allAnswered) {
+    alert('Please answer all questions before submitting.');
+    return;
+  }
+  
+  if (!confirm('Submit your exam?\n\nYou cannot change your answers after submission.')) {
+    return;
+  }
+  
+  // Disable submit button
+  document.getElementById('exam-submit-btn').disabled = true;
+  document.getElementById('exam-submit-btn').textContent = 'Grading...';
+  
+  try {
+    // Grade the exam
+    const results = await gradeFinalExam(currentExam, answers);
+    
+    if (!results) {
+      throw new Error('Grading failed');
+    }
+    
+    // Save attempt to database
+    await saveFinalExamAttempt(currentExam.id, results);
+    
+    // Show results
+    showFinalExamResults(results);
+    
+  } catch (err) {
+    console.error('Error submitting exam:', err);
+    alert('Error grading exam. Please try again.');
+    document.getElementById('exam-submit-btn').disabled = false;
+    document.getElementById('exam-submit-btn').textContent = 'Submit Exam';
+  }
+}
+
+/**
+ * Grade final exam using OpenAI
+ */
+async function gradeFinalExam(exam, userAnswers) {
+  toast('Grading exam...');
+  
+  // Build grading prompt
+  const questionsWithAnswers = exam.questions.map((q, idx) => ({
+    question: q.question,
+    type: q.type,
+    user_answer: userAnswers[idx],
+    canonical_answer: q.canonical_answer,
+    accepted_variants: q.accepted_variants,
+    options: q.options,
+    grammar_category: q.grammar_category
+  }));
+  
+  const prompt = `Grade this European Portuguese final exam.
+
+Questions and user answers:
+${JSON.stringify(questionsWithAnswers, null, 2)}
+
+For each question, determine if the user's answer is correct.
+
+GRADING RULES:
+- For fill/translate/transform/correct: accept canonical_answer AND accepted_variants
+- Minor typos/accents are OK if meaning is clear
+- For choice: only the letter must match exactly
+- Be lenient with spacing and capitalization
+- Mark as correct if answer is semantically equivalent
+
+Return ONLY valid JSON:
+{
+  "results": [
+    {
+      "question_index": 0,
+      "is_correct": true,
+      "user_answer": "...",
+      "canonical_answer": "...",
+      "feedback": "Correct! / Incorrect. The correct answer is..."
+    }
+  ],
+  "total_questions": 20,
+  "correct_count": 15,
+  "score": 75
+}`;
+
+  try {
+    const response = await callOpenAI(prompt, 'grading');
+    
+    if (!response || !response.results) {
+      throw new Error('Invalid grading response');
+    }
+    
+    return response;
+    
+  } catch (err) {
+    console.error('Error grading exam:', err);
+    return null;
+  }
+}
+
+/**
+ * Save exam attempt to database
+ */
+async function saveFinalExamAttempt(examId, results) {
+  const score = results.score;
+  
+  // Update final_exams table
+  const updateData = {
+    attempts: currentExam.attempts + 1,
+    last_attempt_at: new Date().toISOString()
+  };
+  
+  // Update best score if this is better
+  if (score > currentExam.best_score) {
+    updateData.best_score = score;
+  }
+  
+  const { error: updateError } = await sb
+    .from('final_exams')
+    .update(updateData)
+    .eq('id', examId);
+  
+  if (updateError) {
+    console.error('Error updating exam:', updateError);
+  }
+  
+  // Insert attempt record
+  const { error: insertError } = await sb
+    .from('final_exam_attempts')
+    .insert({
+      exam_id: examId,
+      user_id: currentUser.id,
+      answers: results.results,
+      score: score,
+      completed_at: new Date().toISOString()
+    });
+  
+  if (insertError) {
+    console.error('Error saving attempt:', insertError);
+  }
+  
+  // Update local cache
+  const examIndex = finalExams.findIndex(e => e.id === examId);
+  if (examIndex !== -1) {
+    finalExams[examIndex].attempts = updateData.attempts;
+    finalExams[examIndex].best_score = updateData.best_score || currentExam.best_score;
+    finalExams[examIndex].last_attempt_at = updateData.last_attempt_at;
+  }
+  
+  // Reload sidebar to update badge
+  renderSidebarTopics();
+}
+
+/**
+ * Show final exam results
+ */
+function showFinalExamResults(results) {
+  const score = results.score;
+  const passed = score >= 80;
+  
+  const resultsHTML = `
+    <div style="text-align:center;padding:2rem 0;">
+      <div style="font-size:64px;margin-bottom:1rem;">
+        ${passed ? '🎉' : '📝'}
+      </div>
+      <div style="font-size:28px;font-weight:500;margin-bottom:0.5rem;">
+        ${passed ? 'Congratulations!' : 'Keep practicing!'}
+      </div>
+      <div style="font-size:48px;font-weight:500;color:${passed ? 'var(--green)' : 'var(--red)'};margin-bottom:1rem;">
+        ${score}%
+      </div>
+      <div style="font-size:14px;color:var(--ink3);margin-bottom:2rem;">
+        ${results.correct_count} out of ${results.total_questions} questions correct
+        ${passed ? ' · Passing grade!' : ' · Passing grade is 80%'}
+      </div>
+    </div>
+    
+    <div style="background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:1.5rem;margin-bottom:2rem;">
+      <div style="font-family:'Geist Mono',monospace;font-size:11px;color:var(--ink3);margin-bottom:1rem;">DETAILED RESULTS</div>
+      ${results.results.map((r, idx) => `
+        <div style="padding:0.75rem 0;border-bottom:1px solid var(--line);${idx === results.results.length - 1 ? 'border-bottom:none;' : ''}">
+          <div style="display:flex;align-items:flex-start;gap:1rem;">
+            <div style="font-size:24px;line-height:1;">
+              ${r.is_correct ? '✓' : '✗'}
+            </div>
+            <div style="flex:1;">
+              <div style="font-size:14px;color:var(--ink2);margin-bottom:0.25rem;">
+                <strong>Q${idx + 1}:</strong> ${currentExam.questions[idx].question}
+              </div>
+              <div style="font-size:13px;color:${r.is_correct ? 'var(--green)' : 'var(--red)'};margin-bottom:0.25rem;">
+                Your answer: ${r.user_answer}
+              </div>
+              ${!r.is_correct ? `<div style="font-size:13px;color:var(--ink3);">Correct answer: ${r.canonical_answer}</div>` : ''}
+              <div style="font-size:12px;color:var(--ink3);margin-top:0.5rem;font-style:italic;">
+                ${r.feedback}
+              </div>
+            </div>
+          </div>
+        </div>
+      `).join('')}
+    </div>
+    
+    <div style="display:flex;gap:1rem;justify-content:center;">
+      <button class="btn secondary" onclick="showHome()">Back to Topics</button>
+      <button class="btn" onclick="retakeFinalExam()">Retake Exam</button>
+    </div>
+  `;
+  
+  document.getElementById('exam-questions').innerHTML = resultsHTML;
+  document.getElementById('exam-progress').style.display = 'none';
+  document.getElementById('exam-submit-btn').style.display = 'none';
+  document.getElementById('exam-completion-status').style.display = 'none';
+  
+  toast(passed ? 'Exam passed! 🎉' : 'Try again to improve your score');
+}
+
+/**
+ * Retake exam
+ */
+function retakeFinalExam() {
+  if (!currentExam) {
+    showHome();
+    return;
+  }
+  
+  // Reload the exam
+  showFinalExamTaking(currentExam);
 }
 
 // ══════════════════════════════════════════════════════
