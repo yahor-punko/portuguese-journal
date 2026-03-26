@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Português — Learning Journal</title>
-<!-- VERSION: v9.0.0 | Build: 2026-03-26 | Major: refactoring + fix final exam unlock logic -->
+<!-- VERSION: v9.0.1 | Build: 2026-03-26 | Fix: final exam generation API call -->
 <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;1,400&family=Geist+Mono:wght@300;400;500&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <style>
@@ -980,10 +980,10 @@ main{padding:2.5rem 3rem;max-width:760px;}
 // ══════════════════════════════════════════════════════
 // VERSION INFO
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v9.0.0';
+const APP_VERSION = 'v9.0.1';
 const BUILD_DATE = '2026-03-26';
 console.log(`%c🇵🇹 Portuguese Learning Journal ${APP_VERSION}`, 'font-weight: bold; font-size: 14px; color: #2a6b3f;');
-console.log(`Build: ${BUILD_DATE} | Refactoring + final exam unlock fix`);
+console.log(`Build: ${BUILD_DATE} | Final exam generation fix`);
 
 // ══════════════════════════════════════════════════════
 // CONFIG — replace with your Supabase project values
@@ -4590,6 +4590,13 @@ async function generateFinalExam(unitNumber, unitTopics) {
   const unitName = `Unidade ${unitNumber}`;
   const unitKey = `unit${unitNumber}`;
   
+  // Get API key
+  const apiKey = await getActiveApiKey();
+  if (!apiKey) {
+    toast('No API key configured. Contact administrator.');
+    return null;
+  }
+  
   toast('Generating final exam...');
   
   // Get exam prompt from database
@@ -4604,7 +4611,13 @@ async function generateFinalExam(unitNumber, unitTopics) {
   const prompt = examPrompt.prompt_content;
 
   try {
-    const response = await callOpenAI(prompt, 'default');
+    // Call OpenAI with correct argument order: (apiKey, prompt, options)
+    const response = await callOpenAI(apiKey, prompt, {
+      model: 'gpt-4o-mini',
+      temperature: 0.4,
+      schema: EXERCISE_SCHEMA,
+      schemaName: 'final_exam_generation'
+    });
     
     if (!response || !response.items || response.items.length === 0) {
       toast('Error: Invalid exam generated');
