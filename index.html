@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Português — Learning Journal</title>
-<!-- VERSION: v8.8.4 | Build: 2026-03-26 | Debug: auth listener + button logging -->
+<!-- VERSION: v8.8.5 | Build: 2026-03-26 | Debug: detailed logging for empty topics -->
 <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;1,400&family=Geist+Mono:wght@300;400;500&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <style>
@@ -980,10 +980,10 @@ main{padding:2.5rem 3rem;max-width:760px;}
 // ══════════════════════════════════════════════════════
 // VERSION INFO
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v8.8.4';
+const APP_VERSION = 'v8.8.5';
 const BUILD_DATE = '2026-03-26';
 console.log(`%c🇵🇹 Portuguese Learning Journal ${APP_VERSION}`, 'font-weight: bold; font-size: 14px; color: #2a6b3f;');
-console.log(`Build: ${BUILD_DATE} | Debug: auth listener + button logging`);
+console.log(`Build: ${BUILD_DATE} | Debug: detailed logging`);
 
 // ══════════════════════════════════════════════════════
 // CONFIG — replace with your Supabase project values
@@ -1562,33 +1562,35 @@ function buildPrompt(topic) {
 // INIT
 // ══════════════════════════════════════════════════════
 let isLoggingIn = false;
-let authListenerSet = false;
 
 async function init() {
-  // Setup auth state listener (only once)
-  if (!authListenerSet) {
-    sb.auth.onAuthStateChange(async (_event, session) => {
-      if (session) await onLogin(session.user);
-      else onLogout();
-    });
-    authListenerSet = true;
-  }
+  // Setup auth state listener
+  sb.auth.onAuthStateChange(async (event, session) => {
+    console.log('Auth state changed:', event, 'session:', !!session);
+    if (session) {
+      await onLogin(session.user);
+    } else {
+      onLogout();
+    }
+  });
   
-  // Check current session
-  const { data: { session } } = await sb.auth.getSession();
-  if (session) {
-    await onLogin(session.user);
-  }
+  // Trigger initial check (this will fire onAuthStateChange if session exists)
+  await sb.auth.getSession();
 }
 
 async function onLogin(user) {
+  console.log('=== onLogin called ===');
+  console.log('User:', user.email);
+  console.log('isLoggingIn:', isLoggingIn);
+  
   // Prevent concurrent login attempts
   if (isLoggingIn) {
-    console.log('Login already in progress, skipping...');
+    console.log('⚠️ Login already in progress, skipping...');
     return;
   }
   
   isLoggingIn = true;
+  console.log('✓ Starting login process...');
   
   try {
     currentUser = user;
@@ -1627,12 +1629,17 @@ async function onLogin(user) {
   // Load final exams
   await loadFinalExams();
   
+  console.log('✓ Loading all data...');
   await loadAllData();
+  console.log('✓ Topics loaded:', topics.length);
+  console.log('✓ Showing home...');
   showHome();
+  console.log('✓ Login complete!');
   } catch (err) {
-    console.error('Error during login:', err);
+    console.error('❌ Error during login:', err);
   } finally {
     isLoggingIn = false;
+    console.log('✓ isLoggingIn reset to false');
   }
 }
 
@@ -1797,14 +1804,22 @@ async function loadFinalExams() {
 }
 
 async function loadAllData() {
+  console.log('=== loadAllData called ===');
   setSyncStatus('syncing...');
   try {
+    console.log('Fetching topics, exercises, vocab, errors...');
     const [{ data: topicsData }, { data: exercisesData }, { data: vocabData }, { data: errorsData }] = await Promise.all([
       sb.from('topics').select('*').order('id'),
       sb.from('exercises').select('*').order('created_at'),
       sb.from('vocab').select('*').order('added_at'),
       sb.from('errors').select('*').order('created_at')
     ]);
+    
+    console.log('Raw data received:');
+    console.log('- topics:', topicsData?.length || 0);
+    console.log('- exercises:', exercisesData?.length || 0);
+    console.log('- vocab:', vocabData?.length || 0);
+    console.log('- errors:', errorsData?.length || 0);
 
     topics = (topicsData || []).map(t => ({
       ...t,
@@ -1812,11 +1827,13 @@ async function loadAllData() {
       vocab: (vocabData || []).filter(v => v.topic_id === t.id),
       errors: (errorsData || []).filter(e => e.topic_id === t.id)
     }));
+    
+    console.log('✓ Topics assembled:', topics.length);
 
     setSyncStatus('synced');
   } catch(e) {
     setSyncStatus('sync error');
-    console.error(e);
+    console.error('❌ loadAllData error:', e);
   }
 }
 
