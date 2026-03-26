@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Português — Learning Journal</title>
-<!-- VERSION: v8.8.5 | Build: 2026-03-26 | Debug: detailed logging for empty topics -->
+<!-- VERSION: v8.8.6 | Build: 2026-03-26 | Debug: DB access diagnostics -->
 <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;1,400&family=Geist+Mono:wght@300;400;500&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <style>
@@ -980,10 +980,10 @@ main{padding:2.5rem 3rem;max-width:760px;}
 // ══════════════════════════════════════════════════════
 // VERSION INFO
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v8.8.5';
+const APP_VERSION = 'v8.8.6';
 const BUILD_DATE = '2026-03-26';
 console.log(`%c🇵🇹 Portuguese Learning Journal ${APP_VERSION}`, 'font-weight: bold; font-size: 14px; color: #2a6b3f;');
-console.log(`Build: ${BUILD_DATE} | Debug: detailed logging`);
+console.log(`Build: ${BUILD_DATE} | DB access diagnostics`);
 
 // ══════════════════════════════════════════════════════
 // CONFIG — replace with your Supabase project values
@@ -2245,29 +2245,49 @@ function openEditTopic() {
 }
 
 async function saveTopic() {
+  console.log('=== saveTopic called ===');
   const name = document.getElementById('mt-name').value.trim();
   if (!name) { toast('Topic name required'); return; }
+  
   const payload = {
     unit: document.getElementById('mt-unit').value.trim(),
     name,
     custom_prompt: document.getElementById('mt-prompt').value.trim(),
     user_id: currentUser.id
   };
+  
+  console.log('Payload:', payload);
+  console.log('currentUser.id:', currentUser.id);
+  console.log('editingTopicId:', editingTopicId);
+  
   if (editingTopicId) {
+    console.log('Updating existing topic...');
     const { error } = await sb.from('topics').update(payload).eq('id', editingTopicId).eq('user_id', currentUser.id);
-    if (error) { toast('Error: ' + error.message); return; }
+    if (error) { 
+      console.error('❌ Update error:', error);
+      toast('Error: ' + error.message); 
+      return; 
+    }
+    console.log('✓ Topic updated');
     const t = getTopic(editingTopicId);
     if (t) { Object.assign(t, payload); }
     if (currentTopicId === editingTopicId) renderTopicDetail();
   } else {
+    console.log('Inserting new topic...');
     const { data, error } = await sb.from('topics').insert(payload).select().single();
-    if (error) { toast('Error: ' + error.message); return; }
+    if (error) { 
+      console.error('❌ Insert error:', error);
+      toast('Error: ' + error.message); 
+      return; 
+    }
+    console.log('✓ Topic inserted:', data);
     topics.push({ ...data, exercises: [], vocab: [], errors: [] });
   }
   closeModal('modal-topic');
   renderSidebarTopics();
   renderHomeList();
   toast(editingTopicId ? 'Topic updated' : 'Topic added');
+  console.log('✓ saveTopic complete, topics.length:', topics.length);
 }
 
 async function deleteTopic(topicId, topicName) {
@@ -4184,6 +4204,67 @@ function showHome() {
   renderHomeList();
   renderSidebarTopics();
 }
+
+// Diagnostic function - call from console: testDBAccess()
+window.testDBAccess = async function() {
+  console.log('=== Testing DB Access ===');
+  console.log('Current user:', currentUser?.id, currentUser?.email);
+  
+  // Test 1: Try to fetch topics
+  console.log('\n1. Testing SELECT on topics...');
+  const { data: topicsData, error: topicsError } = await sb
+    .from('topics')
+    .select('*');
+  
+  if (topicsError) {
+    console.error('❌ SELECT topics error:', topicsError);
+  } else {
+    console.log('✓ SELECT topics success:', topicsData?.length, 'rows');
+    console.log('Topics:', topicsData);
+  }
+  
+  // Test 2: Try to insert a test topic
+  console.log('\n2. Testing INSERT on topics...');
+  const testPayload = {
+    user_id: currentUser.id,
+    name: 'TEST TOPIC - DELETE ME',
+    unit: 'Test Unit'
+  };
+  
+  const { data: insertData, error: insertError } = await sb
+    .from('topics')
+    .insert(testPayload)
+    .select()
+    .single();
+  
+  if (insertError) {
+    console.error('❌ INSERT error:', insertError);
+    console.log('Error details:', {
+      message: insertError.message,
+      code: insertError.code,
+      details: insertError.details,
+      hint: insertError.hint
+    });
+  } else {
+    console.log('✓ INSERT success:', insertData);
+    
+    // Clean up - delete test topic
+    const { error: deleteError } = await sb
+      .from('topics')
+      .delete()
+      .eq('id', insertData.id);
+    
+    if (deleteError) {
+      console.warn('⚠️ Could not delete test topic:', deleteError);
+    } else {
+      console.log('✓ Test topic cleaned up');
+    }
+  }
+  
+  console.log('\n=== DB Access Test Complete ===');
+};
+
+console.log('💡 Diagnostic function available: testDBAccess()');
 
 function showSettings() {
   showView('settings');
