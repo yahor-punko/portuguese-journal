@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Português — Learning Journal</title>
-<!-- VERSION: v8.8.1 | Build: 2026-03-26 | Added register_constraint to schema -->
+<!-- VERSION: v8.8.2 | Build: 2026-03-26 | Fixed Supabase auth lock warning -->
 <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;1,400&family=Geist+Mono:wght@300;400;500&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <style>
@@ -980,10 +980,10 @@ main{padding:2.5rem 3rem;max-width:760px;}
 // ══════════════════════════════════════════════════════
 // VERSION INFO
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v8.8.1';
+const APP_VERSION = 'v8.8.2';
 const BUILD_DATE = '2026-03-26';
 console.log(`%c🇵🇹 Portuguese Learning Journal ${APP_VERSION}`, 'font-weight: bold; font-size: 14px; color: #2a6b3f;');
-console.log(`Build: ${BUILD_DATE} | Added register_constraint to schema`);
+console.log(`Build: ${BUILD_DATE} | Fixed Supabase auth lock warning`);
 
 // ══════════════════════════════════════════════════════
 // CONFIG — replace with your Supabase project values
@@ -1561,6 +1561,8 @@ function buildPrompt(topic) {
 // ══════════════════════════════════════════════════════
 // INIT
 // ══════════════════════════════════════════════════════
+let isLoggingIn = false;
+
 async function init() {
   const { data: { session } } = await sb.auth.getSession();
   if (session) {
@@ -1573,10 +1575,19 @@ async function init() {
 }
 
 async function onLogin(user) {
-  currentUser = user;
-  document.getElementById('auth-screen').style.display = 'none';
-  document.getElementById('app').style.display = 'grid';
-  document.getElementById('user-email-label').textContent = user.email;
+  // Prevent concurrent login attempts
+  if (isLoggingIn) {
+    console.log('Login already in progress, skipping...');
+    return;
+  }
+  
+  isLoggingIn = true;
+  
+  try {
+    currentUser = user;
+    document.getElementById('auth-screen').style.display = 'none';
+    document.getElementById('app').style.display = 'grid';
+    document.getElementById('user-email-label').textContent = user.email;
   
   // Check admin status
   const { data: adminCheck } = await sb
@@ -1611,11 +1622,17 @@ async function onLogin(user) {
   
   await loadAllData();
   showHome();
+  } catch (err) {
+    console.error('Error during login:', err);
+  } finally {
+    isLoggingIn = false;
+  }
 }
 
 function onLogout() {
   currentUser = null;
   topics = [];
+  isLoggingIn = false;
   document.getElementById('app').style.display = 'none';
   document.getElementById('auth-screen').style.display = 'flex';
 }
@@ -1660,12 +1677,9 @@ async function doSignup() {
   if (error) {
     authMsg(error.message, 'err');
   } else {
-    // Auto-login after signup (no email confirmation needed)
-    authMsg('Account created! Logging in...', 'ok');
-    setTimeout(async () => {
-      const { error: loginError } = await sb.auth.signInWithPassword({ email, password: pw });
-      if (loginError) authMsg(loginError.message, 'err');
-    }, 500);
+    // Supabase will automatically trigger onAuthStateChange with the new session
+    // No need for manual login - the session is already active
+    authMsg('Account created successfully!', 'ok');
   }
 }
 
