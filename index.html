@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Português — Learning Journal</title>
-<!-- VERSION: v9.0.1 | Build: 2026-03-26 | Fix: final exam generation API call -->
+<!-- VERSION: v9.0.2 | Build: 2026-03-26 | Fix: exam grading API call -->
 <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;1,400&family=Geist+Mono:wght@300;400;500&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <style>
@@ -980,10 +980,10 @@ main{padding:2.5rem 3rem;max-width:760px;}
 // ══════════════════════════════════════════════════════
 // VERSION INFO
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v9.0.1';
+const APP_VERSION = 'v9.0.2';
 const BUILD_DATE = '2026-03-26';
 console.log(`%c🇵🇹 Portuguese Learning Journal ${APP_VERSION}`, 'font-weight: bold; font-size: 14px; color: #2a6b3f;');
-console.log(`Build: ${BUILD_DATE} | Final exam generation fix`);
+console.log(`Build: ${BUILD_DATE} | Exam grading fix`);
 
 // ══════════════════════════════════════════════════════
 // CONFIG — replace with your Supabase project values
@@ -4877,6 +4877,13 @@ async function submitFinalExamAnswers() {
  * Grade final exam using OpenAI
  */
 async function gradeFinalExam(exam, userAnswers) {
+  // Get API key
+  const apiKey = await getActiveApiKey();
+  if (!apiKey) {
+    toast('No API key configured');
+    return null;
+  }
+  
   toast('Grading exam...');
   
   // Build grading prompt
@@ -4921,7 +4928,39 @@ Return ONLY valid JSON:
 }`;
 
   try {
-    const response = await callOpenAI(prompt, 'grading');
+    // Define grading schema
+    const gradingSchema = {
+      type: "object",
+      required: ["results", "total_questions", "correct_count", "score"],
+      properties: {
+        results: {
+          type: "array",
+          items: {
+            type: "object",
+            required: ["question_index", "is_correct", "user_answer", "canonical_answer", "feedback"],
+            properties: {
+              question_index: { type: "integer" },
+              is_correct: { type: "boolean" },
+              user_answer: { type: "string" },
+              canonical_answer: { type: "string" },
+              feedback: { type: "string" }
+            },
+            additionalProperties: false
+          }
+        },
+        total_questions: { type: "integer" },
+        correct_count: { type: "integer" },
+        score: { type: "integer" }
+      },
+      additionalProperties: false
+    };
+    
+    const response = await callOpenAI(apiKey, prompt, {
+      model: 'gpt-4o-mini',
+      temperature: 0.2,
+      schema: gradingSchema,
+      schemaName: 'exam_grading'
+    });
     
     if (!response || !response.results) {
       throw new Error('Invalid grading response');
