@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Português — Learning Journal</title>
-<!-- VERSION: v8.6 | Build: 2026-03-24 | Topic prompts moved to database -->
+<!-- VERSION: v8.7.1 | Build: 2026-03-26 | Fixed content refresh & mobile overflow -->
 <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;1,400&family=Geist+Mono:wght@300;400;500&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <style>
@@ -16,8 +16,8 @@
   --green:#2a6b3f;--green-bg:#f3faf6;--green-line:#b8d8c0;
   --blue:#1a4a7a;--blue-bg:#f0f4fa;
 }
-html{font-size:15px;}
-body{font-family:'EB Garamond',Georgia,serif;background:var(--bg);color:var(--ink);min-height:100vh;line-height:1.65;}
+html{font-size:15px;overflow-x:hidden;max-width:100%;}
+body{font-family:'EB Garamond',Georgia,serif;background:var(--bg);color:var(--ink);min-height:100vh;line-height:1.65;overflow-x:hidden;max-width:100%;}
 
 /* ── AUTH SCREEN ── */
 #auth-screen{display:flex;align-items:center;justify-content:center;min-height:100vh;padding:2rem;}
@@ -167,7 +167,7 @@ main{padding:2.5rem 3rem;max-width:760px;}
 .tab-panel.active{display:block;}
 
 /* ── MODAL ── */
-.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:100;display:none;align-items:center;justify-content:center;}
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:100;display:none;align-items:center;justify-content:center;overflow-y:auto;padding:1rem;}
 .modal-overlay.open{display:flex;}
 .modal{background:var(--white);border:1px solid var(--line);padding:2rem;width:100%;max-width:480px;max-height:85vh;overflow-y:auto;}
 .modal h2{font-size:20px;font-weight:400;font-style:italic;margin-bottom:1.5rem;}
@@ -182,7 +182,7 @@ main{padding:2.5rem 3rem;max-width:760px;}
 .sync-indicator{font-family:'Geist Mono',monospace;font-size:10px;color:var(--ink4);margin-left:8px;}
 
 @media(max-width:680px){
-  .shell{grid-template-columns:1fr;}
+  .shell{grid-template-columns:1fr;overflow-x:hidden;}
   aside{
     position:fixed;
     left:-220px;
@@ -193,7 +193,7 @@ main{padding:2.5rem 3rem;max-width:760px;}
     transition:left .3s;
   }
   aside.open{left:0;}
-  main{padding:1.5rem;padding-top:4rem;}
+  main{padding:1.5rem;padding-top:4rem;overflow-x:hidden;}
   .mobile-menu-btn{
     display:flex;
     position:fixed;
@@ -218,8 +218,85 @@ main{padding:2.5rem 3rem;max-width:760px;}
     z-index:50;
   }
   .mobile-overlay.open{display:block;}
+  .modal{
+    margin:1rem;
+    padding:1.5rem;
+    max-width:calc(100% - 2rem);
+  }
+  .modal h2{font-size:18px;}
+  #auth-screen{padding:1rem;}
+  .auth-box{padding:1.5rem 1rem;}
 }
 .mobile-menu-btn{display:none;}
+
+/* Topic Prompt Cards */
+.topic-prompt-card {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 1rem;
+  background: var(--bg);
+  transition: border-color 0.2s;
+}
+.topic-prompt-card:hover {
+  border-color: var(--green);
+}
+.topic-prompt-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 0.75rem;
+}
+.topic-prompt-card-title {
+  font-family: 'EB Garamond', serif;
+  font-size: 18px;
+  font-weight: 500;
+  color: var(--ink1);
+  margin-bottom: 0.25rem;
+}
+.topic-prompt-card-meta {
+  display: flex;
+  gap: 0.75rem;
+  font-size: 12px;
+  color: var(--ink3);
+  font-family: 'Geist Mono', monospace;
+}
+.topic-prompt-card-category {
+  display: inline-block;
+  padding: 2px 8px;
+  background: var(--bg-accent);
+  border-radius: 3px;
+  font-size: 11px;
+  font-weight: 500;
+}
+.topic-prompt-card-content {
+  font-size: 14px;
+  color: var(--ink2);
+  line-height: 1.6;
+  margin-bottom: 0.75rem;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.topic-prompt-card-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 0.75rem;
+}
+.topic-prompt-card-actions button {
+  font-size: 13px;
+  padding: 6px 12px;
+}
+.badge-default {
+  display: inline-block;
+  padding: 2px 6px;
+  background: var(--green);
+  color: white;
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: 500;
+  margin-left: 8px;
+}
 </style>
 </head>
 <body>
@@ -417,7 +494,8 @@ main{padding:2.5rem 3rem;max-width:760px;}
     
     <div class="tabs">
       <button class="tab-btn active" onclick="switchAdminTab('api', event.target)">API Settings</button>
-      <button class="tab-btn" onclick="switchAdminTab('prompts', event.target)">Prompts</button>
+      <button class="tab-btn" onclick="switchAdminTab('prompts', event.target)">System Prompts</button>
+      <button class="tab-btn" onclick="switchAdminTab('topics', event.target)">Topic Prompts</button>
     </div>
     
     <!-- API SETTINGS TAB -->
@@ -534,8 +612,89 @@ main{padding:2.5rem 3rem;max-width:760px;}
         <button class="btn" onclick="savePrompt('validator')">Save Validator Prompt</button>
       </div>
     </div>
+    
+    <!-- TOPIC PROMPTS TAB -->
+    <div id="admin-tab-topics" class="tab-panel">
+      <div class="settings-section">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
+          <div class="settings-title">Topic Prompt Templates</div>
+          <button class="btn" onclick="openAddTopicPrompt()">+ Add Prompt</button>
+        </div>
+        
+        <div style="margin-bottom:1rem;display:flex;gap:10px;">
+          <input type="text" id="topic-prompt-search" placeholder="Search prompts..." style="flex:1;padding:8px;border:1px solid var(--border);border-radius:4px;font-family:'Geist Mono',monospace;font-size:13px;">
+          <select id="topic-prompt-filter" onchange="renderTopicPromptsAdmin()" style="padding:8px;border:1px solid var(--border);border-radius:4px;font-family:'Geist Mono',monospace;font-size:13px;">
+            <option value="">All categories</option>
+            <option value="unit1">Unidade 1</option>
+            <option value="unit2">Unidade 2</option>
+            <option value="unit3">Unidade 3</option>
+            <option value="unit4">Unidade 4</option>
+            <option value="unit5">Unidade 5</option>
+            <option value="unit6">Unidade 6</option>
+            <option value="unit7">Unidade 7</option>
+            <option value="unit8">Unidade 8</option>
+            <option value="unit9">Unidade 9</option>
+            <option value="unit10">Unidade 10</option>
+            <option value="custom">Custom</option>
+          </select>
+        </div>
+        
+        <div id="topic-prompts-list" style="display:flex;flex-direction:column;gap:10px;">
+          <div style="color:var(--ink3);text-align:center;padding:2rem;">Loading prompts...</div>
+        </div>
+      </div>
+    </div>
   </div>
 </main>
+</div>
+
+<!-- ADD/EDIT TOPIC PROMPT MODAL -->
+<div class="modal-overlay" id="modal-topic-prompt">
+  <div class="modal" style="max-width:700px;">
+    <h2 id="modal-topic-prompt-title">Add Topic Prompt</h2>
+    
+    <div class="field">
+      <label>Prompt Name <span style="color:var(--red);">*</span></label>
+      <input type="text" id="mtp-name" placeholder="U1.1 Greetings & introductions">
+    </div>
+    
+    <div class="field">
+      <label>Category</label>
+      <select id="mtp-category">
+        <option value="unit1">Unidade 1</option>
+        <option value="unit2">Unidade 2</option>
+        <option value="unit3">Unidade 3</option>
+        <option value="unit4">Unidade 4</option>
+        <option value="unit5">Unidade 5</option>
+        <option value="unit6">Unidade 6</option>
+        <option value="unit7">Unidade 7</option>
+        <option value="unit8">Unidade 8</option>
+        <option value="unit9">Unidade 9</option>
+        <option value="unit10">Unidade 10</option>
+        <option value="custom">Custom</option>
+      </select>
+    </div>
+    
+    <div class="field">
+      <label>Description</label>
+      <input type="text" id="mtp-description" placeholder="Português a Valer 1 — Unit 1.1">
+    </div>
+    
+    <div class="field">
+      <label>Prompt Content <span style="color:var(--red);">*</span></label>
+      <textarea id="mtp-content" rows="12" placeholder="Focus on greetings (olá, bom dia, boa tarde, boa noite)..."></textarea>
+    </div>
+    
+    <div class="field" style="display:flex;align-items:center;gap:10px;">
+      <input type="checkbox" id="mtp-default">
+      <label for="mtp-default" style="margin:0;cursor:pointer;">Is default template</label>
+    </div>
+    
+    <div class="modal-actions">
+      <button class="btn secondary" onclick="closeTopicPromptModal()">Cancel</button>
+      <button class="btn" onclick="saveTopicPrompt()">Save Prompt</button>
+    </div>
+  </div>
 </div>
 
 <!-- ADD/EDIT TOPIC MODAL -->
@@ -566,10 +725,10 @@ main{padding:2.5rem 3rem;max-width:760px;}
 // ══════════════════════════════════════════════════════
 // VERSION INFO
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v8.6';
-const BUILD_DATE = '2026-03-24';
+const APP_VERSION = 'v8.7.1';
+const BUILD_DATE = '2026-03-26';
 console.log(`%c🇵🇹 Portuguese Learning Journal ${APP_VERSION}`, 'font-weight: bold; font-size: 14px; color: #2a6b3f;');
-console.log(`Build: ${BUILD_DATE} | Topic prompts moved to database`);
+console.log(`Build: ${BUILD_DATE} | Fixed content refresh & mobile overflow`);
 
 // ══════════════════════════════════════════════════════
 // CONFIG — replace with your Supabase project values
@@ -1364,6 +1523,32 @@ document.querySelectorAll('.modal-overlay').forEach(m => {
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') document.querySelectorAll('.modal-overlay.open').forEach(m => m.classList.remove('open'));
 });
+
+// Topic prompts search handler
+document.addEventListener('DOMContentLoaded', () => {
+  const searchInput = document.getElementById('topic-prompt-search');
+  if (searchInput) {
+    searchInput.addEventListener('input', debounce(() => {
+      renderTopicPromptsAdmin();
+    }, 300));
+  }
+});
+
+// Debounce helper
+function debounce(func, wait) {
+  let timeout;
+  return function(...args) {
+    clearTimeout(timeout);
+    timeout = setTimeout(() => func.apply(this, args), wait);
+  };
+}
+
+// Escape HTML helper
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
 
 // ══════════════════════════════════════════════════════
 // NAVIGATION (moved to end of file for mobile menu integration)
@@ -2213,6 +2398,292 @@ function switchAdminTab(tab, btn) {
   
   btn.classList.add('active');
   document.getElementById(`admin-tab-${tab}`).classList.add('active');
+  
+  // Load topic prompts when switching to topics tab
+  if (tab === 'topics') {
+    renderTopicPromptsAdmin();
+  }
+}
+
+// ══════════════════════════════════════════════════════
+// TOPIC PROMPTS ADMIN FUNCTIONS
+// ══════════════════════════════════════════════════════
+
+let currentEditingPromptId = null;
+
+/**
+ * Render topic prompts list in admin panel
+ */
+async function renderTopicPromptsAdmin() {
+  const container = document.getElementById('topic-prompts-list');
+  const searchInput = document.getElementById('topic-prompt-search');
+  const filterSelect = document.getElementById('topic-prompt-filter');
+  
+  if (!container) return;
+  
+  container.innerHTML = '<div style="color:var(--ink3);text-align:center;padding:2rem;">Loading prompts...</div>';
+  
+  try {
+    const { data, error } = await sb
+      .from('topic_prompts')
+      .select('*')
+      .order('category', { ascending: true })
+      .order('prompt_name', { ascending: true });
+    
+    if (error) throw error;
+    
+    if (!data || data.length === 0) {
+      container.innerHTML = '<div style="color:var(--ink3);text-align:center;padding:2rem;">No topic prompts found. Click "+ Add Prompt" to create one.</div>';
+      return;
+    }
+    
+    // Apply filters
+    let filtered = data;
+    
+    // Category filter
+    const categoryFilter = filterSelect?.value || '';
+    if (categoryFilter) {
+      filtered = filtered.filter(p => p.category === categoryFilter);
+    }
+    
+    // Search filter
+    const searchTerm = searchInput?.value.toLowerCase() || '';
+    if (searchTerm) {
+      filtered = filtered.filter(p => 
+        p.prompt_name.toLowerCase().includes(searchTerm) ||
+        p.description?.toLowerCase().includes(searchTerm) ||
+        p.prompt_content.toLowerCase().includes(searchTerm)
+      );
+    }
+    
+    if (filtered.length === 0) {
+      container.innerHTML = '<div style="color:var(--ink3);text-align:center;padding:2rem;">No prompts match your filters.</div>';
+      return;
+    }
+    
+    // Render cards
+    container.innerHTML = filtered.map(prompt => `
+      <div class="topic-prompt-card">
+        <div class="topic-prompt-card-header">
+          <div>
+            <div class="topic-prompt-card-title">
+              ${escapeHtml(prompt.prompt_name)}
+              ${prompt.is_default ? '<span class="badge-default">DEFAULT</span>' : ''}
+            </div>
+            <div class="topic-prompt-card-meta">
+              <span class="topic-prompt-card-category">${getCategoryLabel(prompt.category)}</span>
+              ${prompt.description ? `<span>${escapeHtml(prompt.description)}</span>` : ''}
+            </div>
+          </div>
+        </div>
+        <div class="topic-prompt-card-content">${escapeHtml(prompt.prompt_content)}</div>
+        <div class="topic-prompt-card-actions">
+          <button class="btn secondary" onclick="editTopicPrompt(${prompt.id})">Edit</button>
+          <button class="btn secondary" onclick="duplicateTopicPrompt(${prompt.id})" title="Duplicate this prompt">Duplicate</button>
+          <button class="btn secondary" style="color:var(--red);" onclick="deleteTopicPrompt(${prompt.id}, '${escapeHtml(prompt.prompt_name).replace(/'/g, "\\'")}')">Delete</button>
+        </div>
+      </div>
+    `).join('');
+    
+  } catch (err) {
+    console.error('Error loading topic prompts:', err);
+    container.innerHTML = '<div style="color:var(--red);text-align:center;padding:2rem;">Error loading prompts. Check console.</div>';
+  }
+}
+
+/**
+ * Get category label for display
+ */
+function getCategoryLabel(category) {
+  const labels = {
+    'unit1': 'Unidade 1',
+    'unit2': 'Unidade 2',
+    'unit3': 'Unidade 3',
+    'unit4': 'Unidade 4',
+    'unit5': 'Unidade 5',
+    'unit6': 'Unidade 6',
+    'unit7': 'Unidade 7',
+    'unit8': 'Unidade 8',
+    'unit9': 'Unidade 9',
+    'unit10': 'Unidade 10',
+    'custom': 'Custom'
+  };
+  return labels[category] || category;
+}
+
+/**
+ * Open modal to add new topic prompt
+ */
+function openAddTopicPrompt() {
+  currentEditingPromptId = null;
+  document.getElementById('modal-topic-prompt-title').textContent = 'Add Topic Prompt';
+  document.getElementById('mtp-name').value = '';
+  document.getElementById('mtp-category').value = 'unit1';
+  document.getElementById('mtp-description').value = '';
+  document.getElementById('mtp-content').value = '';
+  document.getElementById('mtp-default').checked = false;
+  document.getElementById('modal-topic-prompt').classList.add('open');
+}
+
+/**
+ * Edit existing topic prompt
+ */
+async function editTopicPrompt(id) {
+  try {
+    const { data, error } = await sb
+      .from('topic_prompts')
+      .select('*')
+      .eq('id', id)
+      .single();
+    
+    if (error) throw error;
+    
+    currentEditingPromptId = id;
+    document.getElementById('modal-topic-prompt-title').textContent = 'Edit Topic Prompt';
+    document.getElementById('mtp-name').value = data.prompt_name;
+    document.getElementById('mtp-category').value = data.category || 'custom';
+    document.getElementById('mtp-description').value = data.description || '';
+    document.getElementById('mtp-content').value = data.prompt_content;
+    document.getElementById('mtp-default').checked = data.is_default || false;
+    document.getElementById('modal-topic-prompt').classList.add('open');
+    
+  } catch (err) {
+    console.error('Error loading prompt:', err);
+    alert('Error loading prompt. Check console.');
+  }
+}
+
+/**
+ * Duplicate topic prompt
+ */
+async function duplicateTopicPrompt(id) {
+  try {
+    const { data, error } = await sb
+      .from('topic_prompts')
+      .select('*')
+      .eq('id', id)
+      .single();
+    
+    if (error) throw error;
+    
+    currentEditingPromptId = null;
+    document.getElementById('modal-topic-prompt-title').textContent = 'Duplicate Topic Prompt';
+    document.getElementById('mtp-name').value = data.prompt_name + ' (copy)';
+    document.getElementById('mtp-category').value = data.category || 'custom';
+    document.getElementById('mtp-description').value = data.description || '';
+    document.getElementById('mtp-content').value = data.prompt_content;
+    document.getElementById('mtp-default').checked = false; // Don't copy default flag
+    document.getElementById('modal-topic-prompt').classList.add('open');
+    
+  } catch (err) {
+    console.error('Error duplicating prompt:', err);
+    alert('Error duplicating prompt. Check console.');
+  }
+}
+
+/**
+ * Save topic prompt (create or update)
+ */
+async function saveTopicPrompt() {
+  const name = document.getElementById('mtp-name').value.trim();
+  const category = document.getElementById('mtp-category').value;
+  const description = document.getElementById('mtp-description').value.trim();
+  const content = document.getElementById('mtp-content').value.trim();
+  const isDefault = document.getElementById('mtp-default').checked;
+  
+  if (!name) {
+    alert('Prompt name is required');
+    return;
+  }
+  
+  if (!content) {
+    alert('Prompt content is required');
+    return;
+  }
+  
+  try {
+    const promptData = {
+      prompt_name: name,
+      category: category,
+      description: description || null,
+      prompt_content: content,
+      is_default: isDefault,
+      updated_at: new Date().toISOString()
+    };
+    
+    if (currentEditingPromptId) {
+      // Update existing prompt
+      const { error } = await sb
+        .from('topic_prompts')
+        .update(promptData)
+        .eq('id', currentEditingPromptId);
+      
+      if (error) throw error;
+      
+      console.log('Topic prompt updated:', currentEditingPromptId);
+    } else {
+      // Create new prompt
+      promptData.created_by = sb.auth.getUser().then(u => u.data.user?.id);
+      
+      const { error } = await sb
+        .from('topic_prompts')
+        .insert(promptData);
+      
+      if (error) throw error;
+      
+      console.log('Topic prompt created');
+    }
+    
+    closeTopicPromptModal();
+    
+    // Reload prompts in both admin panel and main dropdown
+    await loadTopicPrompts();
+    await renderTopicPromptsAdmin();
+    
+    alert(currentEditingPromptId ? 'Prompt updated successfully!' : 'Prompt created successfully!');
+    
+  } catch (err) {
+    console.error('Error saving topic prompt:', err);
+    alert('Error saving prompt: ' + err.message);
+  }
+}
+
+/**
+ * Delete topic prompt
+ */
+async function deleteTopicPrompt(id, name) {
+  if (!confirm(`Delete prompt "${name}"?\n\nThis cannot be undone.`)) {
+    return;
+  }
+  
+  try {
+    const { error } = await sb
+      .from('topic_prompts')
+      .delete()
+      .eq('id', id);
+    
+    if (error) throw error;
+    
+    console.log('Topic prompt deleted:', id);
+    
+    // Reload prompts in both admin panel and main dropdown
+    await loadTopicPrompts();
+    await renderTopicPromptsAdmin();
+    
+    alert('Prompt deleted successfully!');
+    
+  } catch (err) {
+    console.error('Error deleting topic prompt:', err);
+    alert('Error deleting prompt: ' + err.message);
+  }
+}
+
+/**
+ * Close topic prompt modal
+ */
+function closeTopicPromptModal() {
+  document.getElementById('modal-topic-prompt').classList.remove('open');
+  currentEditingPromptId = null;
 }
 
 /**
@@ -3128,6 +3599,15 @@ function showTopicDetail(topicId) {
   
   // Load cached explanation (if exists) but don't auto-generate exercises
   loadCachedExplanation();
+  
+  // Re-render current active tab to refresh content
+  const activeTab = document.querySelector('#view-topic .tab-panel.active');
+  if (activeTab) {
+    const tabId = activeTab.id;
+    if (tabId === 'tab-vocab') renderVocab();
+    if (tabId === 'tab-errors') renderErrors();
+    if (tabId === 'tab-prompt') loadTopicPrompt();
+  }
 }
 
 // ══════════════════════════════════════════════════════
