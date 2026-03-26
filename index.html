@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Português — Learning Journal</title>
-<!-- VERSION: v8.5 | Build: 2026-03-24 | Vocab in topics + mobile menu -->
+<!-- VERSION: v8.6 | Build: 2026-03-24 | Topic prompts moved to database -->
 <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;1,400&family=Geist+Mono:wght@300;400;500&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <style>
@@ -545,51 +545,7 @@ main{padding:2.5rem 3rem;max-width:760px;}
     <div class="field" id="mt-preset-field">
       <label>Choose from Português a Valer 1</label>
       <select id="mt-preset" onchange="applyPreset(this.value)">
-        <option value="">— pick a chapter —</option>
-        <optgroup label="Unidade 1 — Apresentações">
-          <option value="U1|Unidade 1|Apresentações — greetings &amp; introductions|Focus on greetings (olá, bom dia, boa tarde, boa noite), personal introductions (como se chama, chamo-me), verb SER present tense (sou, és, é, somos, são), definite/indefinite articles (o/a, um/uma), and basic questions (Como? De onde? Qual?). Generate fill-in-the-blank and translation exercises.">1.1 Greetings &amp; introductions</option>
-          <option value="U1|Unidade 1|Apresentações — verb SER &amp; nationalities|Focus on verb SER conjugation in full, nationality adjectives (russo/russa, português/portuguesa, inglês/inglesa), gender agreement of adjectives, and country names. Mix fill-in-the-blank, transformation, and translation from Russian.">1.2 Verb SER &amp; nationalities</option>
-          <option value="U1|Unidade 1|Apresentações — numbers &amp; age|Focus on numbers 0–100, asking and stating age (Quantos anos tem? / Tenho X anos), verb TER present tense, telephone numbers and addresses. Include number dictation style exercises and sentence construction.">1.3 Numbers &amp; age</option>
-        </optgroup>
-        <optgroup label="Unidade 2 — O dia a dia">
-          <option value="U2|Unidade 2|O dia a dia — daily routine verbs|Focus on regular -AR verbs (falar, trabalhar, estudar, morar, gostar) in present tense, full conjugation, negation (não), and frequency adverbs (sempre, nunca, às vezes). Generate conjugation drills and sentence construction.">2.1 Daily routine verbs (-AR)</option>
-          <option value="U2|Unidade 2|O dia a dia — telling the time|Focus on telling time (Que horas são? São X horas / É uma hora), half past (e meia), quarter (e um quarto / menos um quarto), and daily schedule vocabulary (manhã, tarde, noite). Include time conversion and dialogue exercises.">2.2 Telling the time</option>
-          <option value="U2|Unidade 2|O dia a dia — days &amp; months|Focus on days of the week (segunda-feira … domingo), months (janeiro … dezembro), dates (Que dia é hoje? / Hoje é…), seasons, and prepositions of time (em, de, a). Generate calendar-based and fill-in exercises.">2.3 Days, months &amp; dates</option>
-        </optgroup>
-        <optgroup label="Unidade 3 — A família">
-          <option value="U3|Unidade 3|A família — family vocabulary &amp; ESTAR|Focus on family members (pai, mãe, irmão, irmã, avó, avô, filho, filha, marido, mulher), possessive adjectives (meu/minha, teu/tua, seu/sua, nosso/nossa), and verb ESTAR vs SER contrast.">3.1 Family &amp; possessives</option>
-          <option value="U3|Unidade 3|A família — SER vs ESTAR|Deep focus on the SER/ESTAR distinction: permanent vs temporary states, location (ESTAR), profession (SER), emotions (ESTAR), origin (SER). Generate error-correction and choice exercises with tricky cases.">3.2 SER vs ESTAR</option>
-          <option value="U3|Unidade 3|A família — adjective agreement|Focus on adjective gender and number agreement (alto/alta/altos/altas), placement after noun, irregular adjectives, and describing people physically and personality-wise.">3.3 Adjective agreement</option>
-        </optgroup>
-        <optgroup label="Unidade 4 — Em casa">
-          <option value="U4|Unidade 4|Em casa — house &amp; rooms|Focus on rooms of the house (sala, cozinha, quarto, casa de banho, jardim), furniture vocabulary, prepositions of place (em, no/na, sobre, debaixo de, ao lado de, à frente de, atrás de).">4.1 House &amp; furniture</option>
-          <option value="U4|Unidade 4|Em casa — verbs -ER and -IR|Focus on regular -ER verbs (comer, beber, viver, escrever) and -IR verbs (partir, abrir, discutir) in present tense, contrast with -AR verbs.">4.2 Verbs -ER and -IR</option>
-          <option value="U4|Unidade 4|Em casa — irregular verbs IR, TER, VIR|Focus on irregular verbs IR (vou, vais, vai, vamos, vão), TER, VIR, PÔR in present tense. Include Vou + infinitive (near future).">4.3 Irregular verbs IR, TER, VIR</option>
-        </optgroup>
-        <optgroup label="Unidade 5 — O trabalho">
-          <option value="U5|Unidade 5|O trabalho — professions &amp; workplaces|Focus on professions vocabulary, workplace settings, verb trabalhar + em/como, forming questions (O que faz? Onde trabalha?).">5.1 Professions &amp; workplaces</option>
-          <option value="U5|Unidade 5|O trabalho — direct object pronouns|Focus on direct object pronouns (me, te, o/a, nos, os/as), placement before verb in European Portuguese, contrast with subject pronouns.">5.2 Direct object pronouns</option>
-        </optgroup>
-        <optgroup label="Unidade 6 — Os tempos livres">
-          <option value="U6|Unidade 6|Os tempos livres — hobbies &amp; preferences|Focus on leisure activities, verb GOSTAR DE + infinitive/noun, verb PREFERIR, expressing likes/dislikes, adverbs of degree.">6.1 Hobbies &amp; preferences</option>
-          <option value="U6|Unidade 6|Os tempos livres — Pretérito Perfeito intro|Introduction to Pretérito Perfeito Simples: regular -AR verbs, time expressions (ontem, na semana passada, há X dias).">6.2 Pretérito Perfeito (-AR)</option>
-        </optgroup>
-        <optgroup label="Unidade 7 — As compras">
-          <option value="U7|Unidade 7|As compras — shopping vocabulary|Focus on shopping dialogues, clothing and food vocabulary, colours with agreement, demonstratives (este/esta, esse/essa, aquele/aquela).">7.1 Shopping &amp; demonstratives</option>
-          <option value="U7|Unidade 7|As compras — Pretérito Perfeito -ER/-IR|Focus on Pretérito Perfeito of -ER and -IR verbs and irregular forms (ser/ir → fui, ter → tive, fazer → fiz).">7.2 Pretérito Perfeito (-ER/-IR)</option>
-        </optgroup>
-        <optgroup label="Unidade 8 — A saúde">
-          <option value="U8|Unidade 8|A saúde — body &amp; health|Focus on body parts, health problems (Tenho dores de…), verb DOER, pharmacy/doctor expressions, modal verbs PODER/DEVER.">8.1 Body &amp; health</option>
-          <option value="U8|Unidade 8|A saúde — modal verbs &amp; imperatives|Focus on PODER, DEVER, PRECISAR DE + infinitive, affirmative imperative, giving advice and instructions.">8.2 Modals &amp; imperative</option>
-        </optgroup>
-        <optgroup label="Unidade 9 — As viagens">
-          <option value="U9|Unidade 9|As viagens — transport &amp; directions|Focus on transport vocabulary (autocarro, metro, comboio), asking/giving directions, prepositions of movement.">9.1 Transport &amp; directions</option>
-          <option value="U9|Unidade 9|As viagens — future tense|Focus on simple future tense, immediate future (vou + infinitive), time expressions (amanhã, na próxima semana).">9.2 Future tense</option>
-        </optgroup>
-        <optgroup label="Unidade 10 — Review">
-          <option value="U10|Unidade 10|Revisão geral A1|Comprehensive A1 review: SER/ESTAR, all verb groups, Pretérito Perfeito, irregular verbs, pronouns, articles, adjective agreement, numbers.">10.1 A1 Comprehensive review</option>
-        </optgroup>
-        <option value="custom">✏️ Custom topic</option>
+        <option value="">Loading...</option>
       </select>
     </div>
     <div id="mt-manual-fields">
@@ -610,10 +566,10 @@ main{padding:2.5rem 3rem;max-width:760px;}
 // ══════════════════════════════════════════════════════
 // VERSION INFO
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v8.5';
+const APP_VERSION = 'v8.6';
 const BUILD_DATE = '2026-03-24';
 console.log(`%c🇵🇹 Portuguese Learning Journal ${APP_VERSION}`, 'font-weight: bold; font-size: 14px; color: #2a6b3f;');
-console.log(`Build: ${BUILD_DATE} | Vocab in topics + mobile menu`);
+console.log(`Build: ${BUILD_DATE} | Topic prompts moved to database`);
 
 // ══════════════════════════════════════════════════════
 // CONFIG — replace with your Supabase project values
@@ -635,6 +591,7 @@ let currentAnswers = {};
 let graded = false;
 let isAdmin = false;      // Admin status
 let systemPrompts = {};   // Loaded from DB
+let topicPrompts = [];    // Loaded from DB (topic_prompts table)
 let globalApiKey = null;  // Global API key (for all users)
 
 // ══════════════════════════════════════════════════════
@@ -1220,6 +1177,9 @@ async function onLogin(user) {
   // Load system prompts from DB
   await loadSystemPrompts();
   
+  // Load topic prompts from DB
+  await loadTopicPrompts();
+  
   // Load global API key
   await loadGlobalApiKey();
   
@@ -1337,6 +1297,25 @@ async function loadGlobalApiKey() {
   
   globalApiKey = data?.setting_value || null;
   console.log('Global API key loaded:', globalApiKey ? 'Yes' : 'No');
+}
+
+/**
+ * Load topic prompts from database
+ */
+async function loadTopicPrompts() {
+  const { data: prompts, error } = await sb
+    .from('topic_prompts')
+    .select('*')
+    .order('category', { ascending: true })
+    .order('prompt_name', { ascending: true });
+  
+  if (error) {
+    console.error('Error loading topic prompts:', error);
+    return;
+  }
+  
+  topicPrompts = prompts || [];
+  console.log('Topic prompts loaded:', topicPrompts.length);
 }
 
 async function loadAllData() {
@@ -1591,13 +1570,32 @@ function renderTopicDetail() {
 // ══════════════════════════════════════════════════════
 let editingTopicId = null;
 
-function applyPreset(val) {
+function applyPreset(promptId) {
   document.getElementById('mt-manual-fields').style.opacity = '1';
-  if (!val || val === 'custom') { ['mt-unit','mt-name','mt-prompt'].forEach(id => document.getElementById(id).value=''); return; }
-  const parts = val.split('|');
-  document.getElementById('mt-unit').value = parts[1] || '';
-  document.getElementById('mt-name').value = parts[2] || '';
-  document.getElementById('mt-prompt').value = parts[3] || '';
+  
+  if (!promptId || promptId === 'custom') { 
+    ['mt-unit','mt-name','mt-prompt'].forEach(id => document.getElementById(id).value=''); 
+    return; 
+  }
+  
+  // Find prompt in topicPrompts by ID
+  const prompt = topicPrompts.find(p => p.id === parseInt(promptId));
+  if (!prompt) {
+    console.error('Prompt not found:', promptId);
+    return;
+  }
+  
+  // Extract unit from prompt_name (e.g., "U1.1 Greetings & introductions" → "Unidade 1")
+  const unitMatch = prompt.prompt_name.match(/^U(\d+)\./);
+  const unitNumber = unitMatch ? unitMatch[1] : '';
+  const unitText = unitNumber ? `Unidade ${unitNumber}` : '';
+  
+  // Extract topic name (everything after "U1.1 ")
+  const topicName = prompt.prompt_name.replace(/^U\d+\.\d+\s+/, '');
+  
+  document.getElementById('mt-unit').value = unitText;
+  document.getElementById('mt-name').value = topicName;
+  document.getElementById('mt-prompt').value = prompt.prompt_content;
 }
 
 function openAddTopic() {
@@ -1608,7 +1606,48 @@ function openAddTopic() {
   ['mt-unit','mt-name','mt-prompt'].forEach(id => document.getElementById(id).value='');
   document.getElementById('mt-preset-field').style.display = 'block';
   document.getElementById('mt-manual-fields').style.opacity = '0.6';
+  
+  // Generate dropdown from topicPrompts
+  renderTopicPromptsDropdown();
+  
   openModal('modal-topic');
+}
+
+function renderTopicPromptsDropdown() {
+  const select = document.getElementById('mt-preset');
+  if (!select) return;
+  
+  let html = '<option value="">— pick a chapter —</option>';
+  
+  // Group prompts by unit (category)
+  const grouped = {};
+  topicPrompts.forEach(p => {
+    if (!grouped[p.category]) grouped[p.category] = [];
+    grouped[p.category].push(p);
+  });
+  
+  // Sort categories (unit1, unit2, ...)
+  const sortedCategories = Object.keys(grouped).sort((a, b) => {
+    const aNum = parseInt(a.replace('unit', '')) || 999;
+    const bNum = parseInt(b.replace('unit', '')) || 999;
+    return aNum - bNum;
+  });
+  
+  // Build optgroups
+  sortedCategories.forEach(cat => {
+    const unitNum = cat.replace('unit', '');
+    const unitLabel = `Unidade ${unitNum}`;
+    
+    html += `<optgroup label="${unitLabel}">`;
+    grouped[cat].forEach(p => {
+      html += `<option value="${p.id}">${p.prompt_name.replace(/^U\d+\.\d+\s+/, '')}</option>`;
+    });
+    html += `</optgroup>`;
+  });
+  
+  html += '<option value="custom">✏️ Custom topic</option>';
+  
+  select.innerHTML = html;
 }
 
 function openEditTopic() {
