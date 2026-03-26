@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Português — Learning Journal</title>
-<!-- VERSION: v8.8.2 | Build: 2026-03-26 | Fixed Supabase auth lock warning -->
+<!-- VERSION: v8.8.3 | Build: 2026-03-26 | Fixed Check button not working -->
 <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;1,400&family=Geist+Mono:wght@300;400;500&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <style>
@@ -980,10 +980,10 @@ main{padding:2.5rem 3rem;max-width:760px;}
 // ══════════════════════════════════════════════════════
 // VERSION INFO
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v8.8.2';
+const APP_VERSION = 'v8.8.3';
 const BUILD_DATE = '2026-03-26';
 console.log(`%c🇵🇹 Portuguese Learning Journal ${APP_VERSION}`, 'font-weight: bold; font-size: 14px; color: #2a6b3f;');
-console.log(`Build: ${BUILD_DATE} | Fixed Supabase auth lock warning`);
+console.log(`Build: ${BUILD_DATE} | Fixed Check button not working`);
 
 // ══════════════════════════════════════════════════════
 // CONFIG — replace with your Supabase project values
@@ -3973,7 +3973,7 @@ async function submitExercise() {
   } finally {
     status.classList.remove('loading');
     status.textContent = '';
-    graded = true;
+    // Don't set graded = true here - move it to end of processGrading
   }
 
   await processGrading(results, answers);
@@ -4084,6 +4084,12 @@ async function processGrading(results, answers) {
   if (!btnRow) {
     console.error('❌ btn-row NOT FOUND in #exercise-area');
     console.log('exercise-area HTML:', document.getElementById('exercise-area')?.innerHTML?.substring(0, 500));
+    // Re-enable button if something went wrong
+    const fallbackBtn = document.querySelector('#exercise-area .btn');
+    if (fallbackBtn) {
+      fallbackBtn.disabled = false;
+      console.log('✓ Fallback: re-enabled button');
+    }
     return; // Exit early if btn-row not found
   }
   
@@ -4092,6 +4098,12 @@ async function processGrading(results, answers) {
   if (!checkBtn) {
     console.error('❌ Check button NOT FOUND in btn-row');
     console.log('btn-row HTML:', btnRow.innerHTML);
+    // Re-enable button if something went wrong
+    const fallbackBtn = btnRow.querySelector('.btn');
+    if (fallbackBtn) {
+      fallbackBtn.disabled = false;
+      console.log('✓ Fallback: re-enabled button in btn-row');
+    }
     return; // Exit early if button not found
   }
   
@@ -4104,6 +4116,9 @@ async function processGrading(results, answers) {
   checkBtn.disabled = false;
   
   console.log('✓ Button replaced:', checkBtn.textContent, '| disabled:', checkBtn.disabled);
+  
+  // Set graded = true only AFTER successful button replacement
+  graded = true;
 
   renderTopicDetail();
   renderSidebarTopics();
