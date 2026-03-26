@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Português — Learning Journal</title>
-<!-- VERSION: v8.8.9 | Build: 2026-03-26 | Fix: bfcache loader stuck on back button -->
+<!-- VERSION: v8.9.0 | Build: 2026-03-26 | Fix: loader on tab switch (token refresh) -->
 <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;1,400&family=Geist+Mono:wght@300;400;500&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <style>
@@ -980,7 +980,7 @@ main{padding:2.5rem 3rem;max-width:760px;}
 // ══════════════════════════════════════════════════════
 // VERSION INFO
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v8.8.9';
+const APP_VERSION = 'v8.9.0';
 const BUILD_DATE = '2026-03-26';
 console.log(`%c🇵🇹 Portuguese Learning Journal ${APP_VERSION}`, 'font-weight: bold; font-size: 14px; color: #2a6b3f;');
 console.log(`Build: ${BUILD_DATE} | Final fix for auth lock warning`);
@@ -1598,6 +1598,15 @@ async function onLogin(user) {
   console.log('=== onLogin called ===');
   console.log('User:', user.email);
   console.log('isLoggingIn:', isLoggingIn);
+  console.log('loginComplete:', loginComplete);
+  
+  // If already logged in and data loaded, just refresh user info silently
+  if (loginComplete && !isLoggingIn) {
+    console.log('✓ Already logged in, skipping full reload (token refresh)');
+    currentUser = user;
+    document.getElementById('user-email-label').textContent = user.email;
+    return;
+  }
   
   // Prevent concurrent login attempts
   if (isLoggingIn) {
