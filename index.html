@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Português — Learning Journal</title>
-<!-- VERSION: v9.0.2 | Build: 2026-03-26 | Fix: exam grading API call -->
+<!-- VERSION: v9.1.1 | Build: 2026-03-26 | Fix: correct column name (content vs prompt_content) -->
 <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;1,400&family=Geist+Mono:wght@300;400;500&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <style>
@@ -763,6 +763,32 @@ main{padding:2.5rem 3rem;max-width:760px;}
         </div>
         <button class="btn" onclick="savePrompt('validator')">Save Validator Prompt</button>
       </div>
+      
+      <div class="settings-section">
+        <div class="settings-title">Exam Grading Prompt</div>
+        <p style="font-size:14px;color:var(--ink3);margin-bottom:1rem;">
+          This prompt is used to grade final exam answers. Use <code>{{DATA}}</code> placeholder for questions/answers data.
+        </p>
+        <div class="field">
+          <label>Prompt Content</label>
+          <textarea id="admin-prompt-exam_grading" rows="12" placeholder="Prompt will be loaded from database..."></textarea>
+        </div>
+        <div style="display:flex;gap:10px;">
+          <div class="field" style="flex:1;">
+            <label>Model</label>
+            <select id="admin-prompt-exam_grading-model">
+              <option value="gpt-4o-mini">GPT-4o Mini</option>
+              <option value="gpt-5.4-mini">GPT-5.4 Mini</option>
+              <option value="gpt-4o">GPT-4o</option>
+            </select>
+          </div>
+          <div class="field" style="flex:1;">
+            <label>Temperature</label>
+            <input type="number" id="admin-prompt-exam_grading-temp" min="0" max="2" step="0.05" value="0.2">
+          </div>
+        </div>
+        <button class="btn" onclick="savePrompt('exam_grading')">Save Exam Grading Prompt</button>
+      </div>
     </div>
     
     <!-- TOPIC PROMPTS TAB -->
@@ -980,10 +1006,10 @@ main{padding:2.5rem 3rem;max-width:760px;}
 // ══════════════════════════════════════════════════════
 // VERSION INFO
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v9.0.2';
+const APP_VERSION = 'v9.1.1';
 const BUILD_DATE = '2026-03-26';
 console.log(`%c🇵🇹 Portuguese Learning Journal ${APP_VERSION}`, 'font-weight: bold; font-size: 14px; color: #2a6b3f;');
-console.log(`Build: ${BUILD_DATE} | Exam grading fix`);
+console.log(`Build: ${BUILD_DATE} | Exam grading system prompt`);
 
 // ══════════════════════════════════════════════════════
 // CONFIG — replace with your Supabase project values
@@ -2896,7 +2922,7 @@ async function loadAdminPanel() {
   });
   
   // Load all prompts
-  const promptTypes = ['default', 'overview', 'grading', 'validator'];
+  const promptTypes = ['default', 'overview', 'grading', 'validator', 'exam_grading'];
   for (const type of promptTypes) {
     const promptData = systemPrompts[type === 'overview' ? 'topic_overview' : type];
     if (promptData) {
@@ -4886,6 +4912,14 @@ async function gradeFinalExam(exam, userAnswers) {
   
   toast('Grading exam...');
   
+  // Get model and temperature from system prompts
+  const examGradingPromptData = systemPrompts['exam_grading'];
+  const model = examGradingPromptData?.model || 'gpt-4o-mini';
+  const temperature = examGradingPromptData?.temperature || 0.2;
+  
+  // Use custom prompt from DB if available, otherwise use default
+  const customPrompt = examGradingPromptData?.content;
+  
   // Build grading prompt
   const questionsWithAnswers = exam.questions.map((q, idx) => ({
     question: q.question,
@@ -4897,7 +4931,7 @@ async function gradeFinalExam(exam, userAnswers) {
     grammar_category: q.grammar_category
   }));
   
-  const prompt = `Grade this European Portuguese final exam.
+  const defaultPrompt = `Grade this European Portuguese final exam.
 
 Questions and user answers:
 ${JSON.stringify(questionsWithAnswers, null, 2)}
@@ -4926,6 +4960,11 @@ Return ONLY valid JSON:
   "correct_count": 15,
   "score": 75
 }`;
+
+  // Use custom prompt if available, replace {{DATA}} placeholder
+  const prompt = customPrompt 
+    ? customPrompt.replace('{{DATA}}', JSON.stringify(questionsWithAnswers, null, 2))
+    : defaultPrompt;
 
   try {
     // Define grading schema
@@ -4956,8 +4995,8 @@ Return ONLY valid JSON:
     };
     
     const response = await callOpenAI(apiKey, prompt, {
-      model: 'gpt-4o-mini',
-      temperature: 0.2,
+      model: model,
+      temperature: temperature,
       schema: gradingSchema,
       schemaName: 'exam_grading'
     });
