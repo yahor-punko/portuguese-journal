@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Português — Learning Journal</title>
-<!-- VERSION: v8.8.7 | Build: 2026-03-26 | Fixed loadingOverlay redeclaration -->
+<!-- VERSION: v8.8.8 | Build: 2026-03-26 | Final fix for auth lock warning -->
 <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;1,400&family=Geist+Mono:wght@300;400;500&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <style>
@@ -980,10 +980,10 @@ main{padding:2.5rem 3rem;max-width:760px;}
 // ══════════════════════════════════════════════════════
 // VERSION INFO
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v8.8.7';
+const APP_VERSION = 'v8.8.8';
 const BUILD_DATE = '2026-03-26';
 console.log(`%c🇵🇹 Portuguese Learning Journal ${APP_VERSION}`, 'font-weight: bold; font-size: 14px; color: #2a6b3f;');
-console.log(`Build: ${BUILD_DATE} | Fixed: loading race condition`);
+console.log(`Build: ${BUILD_DATE} | Final fix for auth lock warning`);
 
 // ══════════════════════════════════════════════════════
 // CONFIG — replace with your Supabase project values
@@ -1565,9 +1565,19 @@ let isLoggingIn = false;
 let loginComplete = false;
 
 async function init() {
-  // Setup auth state listener
+  // Get current session FIRST
+  const { data: { session } } = await sb.auth.getSession();
+  
+  // Setup auth state listener for FUTURE changes only
   sb.auth.onAuthStateChange(async (event, session) => {
     console.log('Auth state changed:', event, 'session:', !!session);
+    
+    // Skip initial session event - we already handled it above
+    if (event === 'INITIAL_SESSION') {
+      console.log('Skipping INITIAL_SESSION (already processed)');
+      return;
+    }
+    
     if (session) {
       await onLogin(session.user);
     } else {
@@ -1575,8 +1585,13 @@ async function init() {
     }
   });
   
-  // Trigger initial check (this will fire onAuthStateChange if session exists)
-  await sb.auth.getSession();
+  // Handle initial session manually
+  if (session) {
+    console.log('Initial session found, logging in...');
+    await onLogin(session.user);
+  } else {
+    console.log('No initial session');
+  }
 }
 
 async function onLogin(user) {
