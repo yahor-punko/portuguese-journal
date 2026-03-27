@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Português — Learning Journal</title>
-<!-- VERSION: v9.1.1 | Build: 2026-03-26 | Fix: correct column name (content vs prompt_content) -->
+<!-- VERSION: v10.3.1 | Build: 2026-03-26 | LEGACY CODE REMOVED: Old functions replaced with controllers -->
 <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;1,400&family=Geist+Mono:wght@300;400;500&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <style>
@@ -1006,45 +1006,85 @@ main{padding:2.5rem 3rem;max-width:760px;}
 // ══════════════════════════════════════════════════════
 // VERSION INFO
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v9.1.1';
+const APP_VERSION = 'v10.3.1';
 const BUILD_DATE = '2026-03-26';
 console.log(`%c🇵🇹 Portuguese Learning Journal ${APP_VERSION}`, 'font-weight: bold; font-size: 14px; color: #2a6b3f;');
-console.log(`Build: ${BUILD_DATE} | Exam grading system prompt`);
+console.log(`Build: ${BUILD_DATE} | REFACTORED: Modular architecture`);
 
 // ══════════════════════════════════════════════════════
-// CONFIG — replace with your Supabase project values
+// CONFIGURATION & CONSTANTS
 // ══════════════════════════════════════════════════════
-const SUPABASE_URL = 'https://jmmyuhegnzghhtvyswbq.supabase.co';
-const SUPABASE_ANON_KEY = 'sb_publishable_n57q1fkUrOsaEDtG2PsfTw_-dMwYdaO';
+const CONFIG = {
+  // Supabase
+  SUPABASE_URL: 'https://jmmyuhegnzghhtvyswbq.supabase.co',
+  SUPABASE_ANON_KEY: 'sb_publishable_n57q1fkUrOsaEDtG2PsfTw_-dMwYdaO',
+  
+  // Exercise Generation
+  EXERCISE: {
+    MIN_QUESTIONS: 5,
+    MAX_QUESTIONS: 7,
+    RETRY_LIMIT: 2,
+    VALIDATION_TIMEOUT: 10000
+  },
+  
+  // Progress & Scoring
+  PROGRESS: {
+    MIN_EXERCISES_FOR_COMPLETION: 3,
+    EXAM_UNLOCK_THRESHOLD: 100,
+    PASSING_SCORE: 80,
+    SCORE_WEIGHTS: {
+      ZERO_ERRORS: 100,
+      ONE_ERROR: 85,
+      TWO_ERRORS: 70,
+      THREE_PLUS_ERRORS: 50
+    }
+  },
+  
+  // OpenAI
+  OPENAI: {
+    ENDPOINT: 'https://api.openai.com/v1/chat/completions',
+    MODELS: {
+      DEFAULT: 'gpt-4o-mini',
+      FAST: 'gpt-5.4-mini',
+      SMART: 'gpt-4o'
+    },
+    TEMPERATURE: {
+      CREATIVE: 0.7,
+      BALANCED: 0.35,
+      PRECISE: 0.0,
+      GRADING: 0.2
+    }
+  },
+  
+  // UI
+  UI: {
+    DEBOUNCE_DELAY: 300,
+    TOAST_DURATION: 2500,
+    ANIMATION_DURATION: 150,
+    LOADING_OVERLAY_ID: 'loading-overlay'
+  },
+  
+  // Storage
+  STORAGE: {
+    EXERCISE_PREFIX: 'exercise_',
+    OVERVIEW_PREFIX: 'overview_',
+    MAX_CACHE_AGE_DAYS: 30
+  },
+  
+  // Messages
+  MESSAGES: {
+    LOADING: 'Loading data...',
+    GENERATING: 'Generating exercise...',
+    GRADING: 'Grading answers...',
+    ERROR_GENERIC: 'An error occurred. Please try again.',
+    ERROR_NO_API_KEY: 'No API key configured. Contact administrator.',
+    ERROR_DB: 'Database error. Please try again.',
+    SUCCESS_SAVED: 'Saved successfully'
+  }
+};
 
 const { createClient } = supabase;
-const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
-// ══════════════════════════════════════════════════════
-// CONSTANTS
-// ══════════════════════════════════════════════════════
-const EXERCISE_CONFIG = {
-  MIN_QUESTIONS: 5,
-  MAX_QUESTIONS: 7,
-  DEBOUNCE_DELAY: 300
-};
-
-const PROGRESS_THRESHOLDS = {
-  MIN_FOR_COMPLETION: 3,
-  EXAM_UNLOCK_PERCENTAGE: 70
-};
-
-const STORAGE_KEYS = {
-  EXERCISE_PREFIX: 'exercise_',
-  OVERVIEW_PREFIX: 'overview_'
-};
-
-const UI_MESSAGES = {
-  LOADING: 'Loading data...',
-  GENERATING: 'Generating exercise...',
-  GRADING: 'Grading answers...',
-  ERROR_GENERIC: 'An error occurred. Please try again.'
-};
+const sb = createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
 
 // ══════════════════════════════════════════════════════
 // STATE MANAGEMENT
@@ -1327,6 +1367,2263 @@ const GRADING_SCHEMA = {
 };
 
 // ══════════════════════════════════════════════════════
+// CORE MODULES
+// ══════════════════════════════════════════════════════
+
+/**
+ * Error Handler Module
+ * Centralized error handling with user-friendly messages
+ */
+const ErrorHandler = (() => {
+  /**
+   * Handle error with context
+   * @param {Error} error - Error object
+   * @param {Object} context - Error context {module, operation, silent}
+   * @returns {null}
+   */
+  function handle(error, context = {}) {
+    const { module = 'App', operation = 'operation', silent = false } = context;
+    
+    // Log to console
+    console.error(`[${module}] Error during ${operation}:`, error);
+    
+    // Show user-friendly message (unless silent)
+    if (!silent) {
+      const message = getUserFriendlyMessage(error, context);
+      toast(message, CONFIG.UI.TOAST_DURATION);
+    }
+    
+    // Optional callback
+    if (context.onError) {
+      context.onError(error);
+    }
+    
+    return null;
+  }
+  
+  /**
+   * Get user-friendly error message
+   * @param {Error} error - Error object
+   * @param {Object} context - Context info
+   * @returns {string} User-friendly message
+   */
+  function getUserFriendlyMessage(error, context = {}) {
+    const msg = error?.message || '';
+    
+    // API key errors
+    if (msg.includes('API key') || msg.includes('Incorrect API key')) {
+      return CONFIG.MESSAGES.ERROR_NO_API_KEY;
+    }
+    
+    // Database errors
+    if (error?.code) {
+      switch (error.code) {
+        case '23505': return 'This item already exists';
+        case '23503': return 'Cannot delete: item is in use';
+        case '42501': return 'Permission denied';
+        default: return CONFIG.MESSAGES.ERROR_DB;
+      }
+    }
+    
+    // Network errors
+    if (msg.includes('fetch') || msg.includes('network')) {
+      return 'Network error. Please check your connection.';
+    }
+    
+    // Validation errors
+    if (msg.includes('Invalid') || msg.includes('validation')) {
+      return msg; // Show validation message as-is
+    }
+    
+    // Custom message from context
+    if (context.message) {
+      return context.message;
+    }
+    
+    // Generic fallback
+    return CONFIG.MESSAGES.ERROR_GENERIC;
+  }
+  
+  /**
+   * Wrap async function with error handling
+   * @param {Function} fn - Async function to wrap
+   * @param {Object} context - Error context
+   * @returns {Function} Wrapped function
+   */
+  function wrap(fn, context = {}) {
+    return async function(...args) {
+      try {
+        return await fn(...args);
+      } catch (error) {
+        return handle(error, context);
+      }
+    };
+  }
+  
+  // Public API
+  return {
+    handle,
+    wrap,
+    getUserFriendlyMessage
+  };
+})();
+
+/**
+ * Database Module
+ * Centralized database operations with error handling
+ */
+const Database = (() => {
+  /**
+   * Generic query wrapper with error handling
+   * @param {string} table - Table name
+   * @param {Function} operation - Query operation
+   * @param {Object} context - Error context
+   * @returns {Promise<any>} Query result or null on error
+   */
+  async function query(table, operation, context = {}) {
+    try {
+      const { data, error } = await operation(sb.from(table));
+      if (error) throw error;
+      return data;
+    } catch (err) {
+      return ErrorHandler.handle(err, {
+        module: 'Database',
+        operation: `${context.op || 'query'} on ${table}`,
+        ...context
+      });
+    }
+  }
+  
+  // Topics operations
+  const topics = {
+    async getAll(userId) {
+      return query('topics', q => 
+        q.select('*')
+         .eq('user_id', userId)
+         .order('created_at', { ascending: true }),
+        { op: 'getAll topics' }
+      );
+    },
+    
+    async getById(id) {
+      const result = await query('topics', q => 
+        q.select('*').eq('id', id).maybeSingle(),
+        { op: 'getById topic' }
+      );
+      return result;
+    },
+    
+    async create(data) {
+      return query('topics', q => 
+        q.insert(data).select().single(),
+        { op: 'create topic' }
+      );
+    },
+    
+    async update(id, data) {
+      return query('topics', q => 
+        q.update(data).eq('id', id).select().single(),
+        { op: 'update topic' }
+      );
+    },
+    
+    async delete(id) {
+      return query('topics', q => 
+        q.delete().eq('id', id),
+        { op: 'delete topic' }
+      );
+    }
+  };
+  
+  // Exercises operations
+  const exercises = {
+    async create(topicId, errorCount) {
+      return query('exercises', q => 
+        q.insert({ topic_id: topicId, error_count: errorCount }).select().single(),
+        { op: 'create exercise' }
+      );
+    },
+    
+    async getAllForTopic(topicId) {
+      return query('exercises', q => 
+        q.select('*').eq('topic_id', topicId).order('created_at', { ascending: false }),
+        { op: 'get exercises for topic' }
+      );
+    }
+  };
+  
+  // Vocabulary operations
+  const vocab = {
+    async create(topicId, pt, en) {
+      return query('vocab', q => 
+        q.insert({ topic_id: topicId, pt, en }).select().single(),
+        { op: 'create vocab' }
+      );
+    },
+    
+    async getAllForTopic(topicId) {
+      return query('vocab', q => 
+        q.select('*').eq('topic_id', topicId).order('created_at', { ascending: false }),
+        { op: 'get vocab for topic' }
+      );
+    },
+    
+    async deleteAllForTopic(topicId) {
+      return query('vocab', q => 
+        q.delete().eq('topic_id', topicId),
+        { op: 'delete vocab for topic' }
+      );
+    }
+  };
+  
+  // Errors operations
+  const errors = {
+    async create(topicId, text, explanation, grammarCategory) {
+      return query('errors', q => 
+        q.insert({
+          topic_id: topicId,
+          text,
+          explanation,
+          grammar_category: grammarCategory
+        }).select().single(),
+        { op: 'create error' }
+      );
+    },
+    
+    async getAllForTopic(topicId) {
+      return query('errors', q => 
+        q.select('*').eq('topic_id', topicId).order('created_at', { ascending: false }),
+        { op: 'get errors for topic' }
+      );
+    },
+    
+    async deleteAllForTopic(topicId) {
+      return query('errors', q => 
+        q.delete().eq('topic_id', topicId),
+        { op: 'delete errors for topic' }
+      );
+    }
+  };
+  
+  // Admin operations
+  const admin = {
+    async isAdmin(userId) {
+      const result = await query('admins', q => 
+        q.select('id').eq('user_id', userId).maybeSingle(),
+        { op: 'check admin status', silent: true }
+      );
+      return !!result;
+    }
+  };
+  
+  // System operations
+  const system = {
+    async getPrompts() {
+      return query('system_prompts', q => 
+        q.select('*'),
+        { op: 'get system prompts' }
+      );
+    },
+    
+    async updatePrompt(promptType, content, model, temperature) {
+      return query('system_prompts', q => 
+        q.upsert({
+          prompt_type: promptType,
+          content,
+          model,
+          temperature,
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'prompt_type' }),
+        { op: 'update system prompt' }
+      );
+    },
+    
+    async getGlobalApiKey() {
+      const result = await query('system_settings', q => 
+        q.select('setting_value')
+         .eq('setting_key', 'global_api_key')
+         .maybeSingle(),
+        { op: 'get global API key', silent: true }
+      );
+      return result?.setting_value || null;
+    },
+    
+    async setGlobalApiKey(apiKey, userId) {
+      return query('system_settings', q => 
+        q.upsert({
+          setting_key: 'global_api_key',
+          setting_value: apiKey,
+          updated_by: userId,
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'setting_key' }),
+        { op: 'set global API key' }
+      );
+    }
+  };
+  
+  // Public API
+  return {
+    query,
+    topics,
+    exercises,
+    vocab,
+    errors,
+    admin,
+    system
+  };
+})();
+
+/**
+ * Storage Module
+ * LocalStorage operations with error handling
+ */
+const Storage = (() => {
+  /**
+   * Get item from localStorage
+   * @param {string} key - Storage key
+   * @returns {any} Parsed value or null
+   */
+  function get(key) {
+    try {
+      const item = localStorage.getItem(key);
+      return item ? JSON.parse(item) : null;
+    } catch (err) {
+      console.warn(`Storage: Failed to get "${key}"`, err);
+      return null;
+    }
+  }
+  
+  /**
+   * Set item in localStorage
+   * @param {string} key - Storage key
+   * @param {any} value - Value to store
+   * @returns {boolean} Success status
+   */
+  function set(key, value) {
+    try {
+      localStorage.setItem(key, JSON.stringify(value));
+      return true;
+    } catch (err) {
+      console.warn(`Storage: Failed to set "${key}"`, err);
+      return false;
+    }
+  }
+  
+  /**
+   * Remove item from localStorage
+   * @param {string} key - Storage key
+   * @returns {boolean} Success status
+   */
+  function remove(key) {
+    try {
+      localStorage.removeItem(key);
+      return true;
+    } catch (err) {
+      console.warn(`Storage: Failed to remove "${key}"`, err);
+      return false;
+    }
+  }
+  
+  /**
+   * Clear all items from localStorage
+   * @returns {boolean} Success status
+   */
+  function clear() {
+    try {
+      localStorage.clear();
+      return true;
+    } catch (err) {
+      console.warn('Storage: Failed to clear', err);
+      return false;
+    }
+  }
+  
+  /**
+   * Get exercise cache key
+   * @param {string} topicId - Topic ID
+   * @returns {string} Cache key
+   */
+  function getExerciseKey(topicId) {
+    return `${CONFIG.STORAGE.EXERCISE_PREFIX}${topicId}`;
+  }
+  
+  /**
+   * Get overview cache key
+   * @param {string} topicId - Topic ID
+   * @returns {string} Cache key
+   */
+  function getOverviewKey(topicId) {
+    return `${CONFIG.STORAGE.OVERVIEW_PREFIX}${topicId}`;
+  }
+  
+  /**
+   * Get cached exercise
+   * @param {string} topicId - Topic ID
+   * @returns {Object|null} Cached exercise or null
+   */
+  function getCachedExercise(topicId) {
+    return get(getExerciseKey(topicId));
+  }
+  
+  /**
+   * Cache exercise
+   * @param {string} topicId - Topic ID
+   * @param {Object} exercise - Exercise data
+   * @returns {boolean} Success status
+   */
+  function cacheExercise(topicId, exercise) {
+    return set(getExerciseKey(topicId), exercise);
+  }
+  
+  /**
+   * Get cached overview
+   * @param {string} topicId - Topic ID
+   * @returns {Object|null} Cached overview or null
+   */
+  function getCachedOverview(topicId) {
+    return get(getOverviewKey(topicId));
+  }
+  
+  /**
+   * Cache overview
+   * @param {string} topicId - Topic ID
+   * @param {Object} overview - Overview data
+   * @returns {boolean} Success status
+   */
+  function cacheOverview(topicId, overview) {
+    return set(getOverviewKey(topicId), overview);
+  }
+  
+  /**
+   * Clear all topic caches
+   * @param {string} topicId - Topic ID
+   * @returns {void}
+   */
+  function clearTopicCache(topicId) {
+    remove(getExerciseKey(topicId));
+    remove(getOverviewKey(topicId));
+  }
+  
+  // Public API
+  return {
+    get,
+    set,
+    remove,
+    clear,
+    getCachedExercise,
+    cacheExercise,
+    getCachedOverview,
+    cacheOverview,
+    clearTopicCache
+  };
+})();
+
+/**
+ * OpenAI Service Module
+ * Unified OpenAI API integration
+ */
+const OpenAI = (() => {
+  /**
+   * Call OpenAI API with structured outputs
+   * @param {string} apiKey - OpenAI API key
+   * @param {string} prompt - Prompt text
+   * @param {Object} options - {model, temperature, schema, schemaName}
+   * @returns {Promise<Object>} Parsed JSON response
+   */
+  async function call(apiKey, prompt, options = {}) {
+    const {
+      model = CONFIG.OPENAI.MODELS.DEFAULT,
+      temperature = CONFIG.OPENAI.TEMPERATURE.BALANCED,
+      schema = null,
+      schemaName = 'response'
+    } = options;
+
+    const body = {
+      model,
+      temperature,
+      messages: [{ role: 'user', content: prompt }]
+    };
+
+    // Add structured output schema if provided
+    if (schema) {
+      body.response_format = {
+        type: "json_schema",
+        json_schema: {
+          name: schemaName,
+          strict: true,
+          schema
+        }
+      };
+    }
+
+    try {
+      const res = await fetch(CONFIG.OPENAI.ENDPOINT, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`
+        },
+        body: JSON.stringify(body)
+      });
+
+      const data = await res.json();
+      
+      if (!res.ok) {
+        throw new Error(data.error?.message || `HTTP ${res.status}`);
+      }
+
+      const raw = data.choices[0].message.content.trim();
+      return JSON.parse(raw);
+    } catch (err) {
+      return ErrorHandler.handle(err, {
+        module: 'OpenAI',
+        operation: 'API call',
+        message: err.message
+      });
+    }
+  }
+  
+  /**
+   * Get active API key (user's personal key or global key)
+   * @returns {Promise<string|null>} API key or null
+   */
+  async function getActiveApiKey() {
+    if (!currentUser) return null;
+    
+    // Try user's personal key first
+    try {
+      const { data: userSettings, error } = await sb
+        .from('settings')
+        .select('user_api_key')
+        .eq('user_id', currentUser.id)
+        .maybeSingle();
+      
+      if (!error && userSettings?.user_api_key) {
+        console.log('Using user personal API key');
+        return userSettings.user_api_key;
+      }
+    } catch (err) {
+      console.warn('Error loading user API key:', err);
+    }
+    
+    // Fallback to global key
+    if (globalApiKey) {
+      console.log('Using cached global API key');
+      return globalApiKey;
+    }
+    
+    // Load global key from DB
+    const key = await Database.system.getGlobalApiKey();
+    if (key) {
+      globalApiKey = key;
+      console.log('Loaded and using global API key');
+      return key;
+    }
+    
+    console.warn('No API key available (neither user nor global)');
+    return null;
+  }
+  
+  /**
+   * Generate exercise with retry logic
+   * @param {string} apiKey - API key
+   * @param {string} prompt - Exercise prompt
+   * @param {Object} schema - JSON schema
+   * @param {Object} options - Additional options
+   * @returns {Promise<Object>} Exercise data
+   */
+  async function generateExercise(apiKey, prompt, schema, options = {}) {
+    const {
+      model = CONFIG.OPENAI.MODELS.DEFAULT,
+      temperature = CONFIG.OPENAI.TEMPERATURE.BALANCED,
+      retries = CONFIG.EXERCISE.RETRY_LIMIT
+    } = options;
+    
+    let lastError = null;
+    
+    for (let attempt = 0; attempt <= retries; attempt++) {
+      try {
+        const result = await call(apiKey, prompt, {
+          model,
+          temperature,
+          schema,
+          schemaName: 'exercise_generation'
+        });
+        
+        if (result) return result;
+      } catch (err) {
+        lastError = err;
+        console.warn(`Exercise generation attempt ${attempt + 1} failed:`, err);
+      }
+    }
+    
+    throw lastError || new Error('Exercise generation failed after retries');
+  }
+  
+  /**
+   * Grade exercise answers
+   * @param {string} apiKey - API key
+   * @param {string} prompt - Grading prompt
+   * @param {Object} schema - JSON schema
+   * @param {Object} options - Additional options
+   * @returns {Promise<Object>} Grading results
+   */
+  async function gradeExercise(apiKey, prompt, schema, options = {}) {
+    const {
+      model = CONFIG.OPENAI.MODELS.DEFAULT,
+      temperature = CONFIG.OPENAI.TEMPERATURE.GRADING
+    } = options;
+    
+    return call(apiKey, prompt, {
+      model,
+      temperature,
+      schema,
+      schemaName: 'grading_result'
+    });
+  }
+  
+  /**
+   * Generate topic overview
+   * @param {string} apiKey - API key
+   * @param {string} prompt - Overview prompt
+   * @param {Object} schema - JSON schema
+   * @param {Object} options - Additional options
+   * @returns {Promise<Object>} Overview data
+   */
+  async function generateOverview(apiKey, prompt, schema, options = {}) {
+    const {
+      model = CONFIG.OPENAI.MODELS.DEFAULT,
+      temperature = CONFIG.OPENAI.TEMPERATURE.BALANCED
+    } = options;
+    
+    return call(apiKey, prompt, {
+      model,
+      temperature,
+      schema,
+      schemaName: 'topic_overview'
+    });
+  }
+  
+  // Public API
+  return {
+    call,
+    getActiveApiKey,
+    generateExercise,
+    gradeExercise,
+    generateOverview
+  };
+})();
+
+/**
+ * Utilities Module
+ * Helper functions for common operations
+ */
+const Utils = (() => {
+  /**
+   * Debounce function
+   * @param {Function} func - Function to debounce
+   * @param {number} wait - Wait time in ms
+   * @returns {Function} Debounced function
+   */
+  function debounce(func, wait = CONFIG.UI.DEBOUNCE_DELAY) {
+    let timeout;
+    return function(...args) {
+      clearTimeout(timeout);
+      timeout = setTimeout(() => func.apply(this, args), wait);
+    };
+  }
+  
+  /**
+   * Escape HTML special characters
+   * @param {string} text - Text to escape
+   * @returns {string} Escaped text
+   */
+  function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+  }
+  
+  /**
+   * Normalize text for comparison
+   * @param {string} text - Text to normalize
+   * @returns {string} Normalized text
+   */
+  function normalizeText(text) {
+    if (!text) return '';
+    return text
+      .toLowerCase()
+      .trim()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '') // Remove accents
+      .replace(/[^\w\s]/g, '') // Remove punctuation
+      .replace(/\s+/g, ' '); // Normalize whitespace
+  }
+  
+  /**
+   * Generate unique ID
+   * @returns {string} Unique ID
+   */
+  function generateId() {
+    return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  }
+  
+  /**
+   * Format date for display
+   * @param {string|Date} date - Date to format
+   * @returns {string} Formatted date
+   */
+  function formatDate(date) {
+    if (!date) return '';
+    const d = new Date(date);
+    return d.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
+    });
+  }
+  
+  /**
+   * Calculate progress percentage
+   * @param {Array} exercises - Exercise array
+   * @returns {number} Progress percentage (0-100)
+   */
+  function calculateProgress(exercises) {
+    if (!exercises || !exercises.length) return 0;
+    
+    const { ZERO_ERRORS, ONE_ERROR, TWO_ERRORS, THREE_PLUS_ERRORS } = CONFIG.PROGRESS.SCORE_WEIGHTS;
+    
+    let totalScore = 0;
+    exercises.forEach(ex => {
+      const errors = ex.error_count || 0;
+      if (errors === 0) totalScore += ZERO_ERRORS;
+      else if (errors === 1) totalScore += ONE_ERROR;
+      else if (errors === 2) totalScore += TWO_ERRORS;
+      else totalScore += THREE_PLUS_ERRORS;
+    });
+    
+    return Math.round(totalScore / exercises.length);
+  }
+  
+  /**
+   * Check if unit is ready for exam
+   * @param {number} unitNumber - Unit number
+   * @param {Array} allTopics - All topics array
+   * @returns {Object} {ready: boolean, reason: string, topics: Array}
+   */
+  function isUnitReadyForExam(unitNumber, allTopics) {
+    const unitName = `Unidade ${unitNumber}`;
+    const unitTopics = allTopics.filter(t => 
+      t.unit && t.unit.toLowerCase().includes(unitName.toLowerCase())
+    );
+    
+    if (unitTopics.length === 0) {
+      return { ready: false, reason: `No topics found for ${unitName}` };
+    }
+    
+    for (const topic of unitTopics) {
+      if (!topic.exercises || topic.exercises.length === 0) {
+        return { 
+          ready: false, 
+          reason: `${topic.name} has no exercises`,
+          missingTopic: topic.name
+        };
+      }
+      
+      const hasPerfect = topic.exercises.some(ex => ex.error_count === 0);
+      if (!hasPerfect) {
+        return { 
+          ready: false, 
+          reason: `${topic.name} has no exercises with 0 errors`,
+          missingTopic: topic.name
+        };
+      }
+    }
+    
+    return { 
+      ready: true, 
+      topics: unitTopics,
+      topicCount: unitTopics.length
+    };
+  }
+  
+  /**
+   * Get topic by ID from topics array
+   * @param {string} topicId - Topic ID
+   * @param {Array} allTopics - Topics array
+   * @returns {Object|null} Topic or null
+   */
+  function getTopicById(topicId, allTopics = topics) {
+    return allTopics.find(t => t.id === topicId) || null;
+  }
+  
+  // Public API
+  return {
+    debounce,
+    escapeHtml,
+    normalizeText,
+    generateId,
+    formatDate,
+    calculateProgress,
+    isUnitReadyForExam,
+    getTopicById
+  };
+})();
+
+/**
+ * Exercise Engine Module
+ * Exercise generation, validation, and grading
+ */
+const ExerciseEngine = (() => {
+  /**
+   * Validate choice item (must have 4 unique options)
+   * @param {Object} item - Exercise item
+   * @returns {boolean} Is valid
+   */
+  function isValidChoiceItem(item) {
+    if (item.type !== 'choice') return true;
+    if (!item.options || !Array.isArray(item.options)) return false;
+    if (item.options.length !== 4) return false;
+    
+    const unique = new Set(item.options.map(o => o.trim().toLowerCase()));
+    return unique.size === 4;
+  }
+  
+  /**
+   * Normalize question for duplicate detection
+   * @param {string} question - Question text
+   * @returns {string} Normalized question
+   */
+  function normalizeQuestion(question) {
+    return question
+      .toLowerCase()
+      .replace(/[^\w\s]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+  
+  /**
+   * Check for duplicate questions in batch
+   * @param {Array} items - Exercise items
+   * @returns {boolean} Has duplicates
+   */
+  function hasDuplicateQuestions(items) {
+    const normalized = items.map(item => normalizeQuestion(item.question));
+    const unique = new Set(normalized);
+    return unique.size !== normalized.length;
+  }
+  
+  /**
+   * Client-side validation of generated exercises
+   * @param {Object} exerciseData - Exercise data from API
+   * @returns {Array<string>} Array of validation errors (empty if valid)
+   */
+  function validateExerciseData(exerciseData) {
+    const errors = [];
+    
+    if (!exerciseData || !exerciseData.items || !Array.isArray(exerciseData.items)) {
+      errors.push('Invalid exercise data structure');
+      return errors;
+    }
+    
+    // Check each item
+    exerciseData.items.forEach((item, i) => {
+      if (!isValidChoiceItem(item)) {
+        errors.push(`Item ${i+1}: Invalid choice options (expected 4 unique options, got ${item.options?.length || 0})`);
+      }
+    });
+    
+    // Check for duplicates
+    if (hasDuplicateQuestions(exerciseData.items)) {
+      errors.push('Duplicate or near-duplicate questions detected');
+    }
+    
+    return errors;
+  }
+  
+  /**
+   * Validate exercises using AI validator
+   * @param {Object} exerciseJSON - Exercise data
+   * @param {string} apiKey - API key
+   * @returns {Promise<Object>} Validation result {valid, issues, fixed_items}
+   */
+  async function validateWithAI(exerciseJSON, apiKey) {
+    const validatorPromptData = systemPrompts['validator'];
+    const model = validatorPromptData?.model || CONFIG.OPENAI.MODELS.DEFAULT;
+    const temperature = validatorPromptData?.temperature || CONFIG.OPENAI.TEMPERATURE.PRECISE;
+    
+    const prompt = `You are a validator for Portuguese language exercises.
+Check this exercise data for errors:
+
+${JSON.stringify(exerciseJSON, null, 2)}
+
+Validation rules:
+1. Each choice question must have exactly 4 options
+2. Options must be unique
+3. Questions must be unique (no duplicates)
+4. Each item must have: question, type, canonical_answer, grammar_category, explanation
+5. For choice items: options must be array of 4 strings
+
+If you find errors, try to fix them. Return:
+{
+  "valid": true/false,
+  "issues": ["list of issues found"],
+  "fixed_items": [{"index": 0, "item": {...fixed item...}}]
+}`;
+
+    try {
+      const result = await OpenAI.call(apiKey, prompt, { 
+        model, 
+        temperature,
+        schema: VALIDATION_SCHEMA,
+        schemaName: 'validation_result'
+      });
+      return result || { valid: true, issues: [], fixed_items: [] };
+    } catch (err) {
+      console.warn('AI validation failed:', err);
+      return { valid: true, issues: [], fixed_items: [] };
+    }
+  }
+  
+  /**
+   * Generate exercise with validation
+   * @param {Object} topic - Topic object
+   * @param {Object} promptData - Prompt configuration
+   * @returns {Promise<Object>} Exercise data
+   */
+  async function generate(topic, promptData) {
+    const apiKey = await OpenAI.getActiveApiKey();
+    if (!apiKey) {
+      throw new Error(CONFIG.MESSAGES.ERROR_NO_API_KEY);
+    }
+    
+    const model = promptData?.model || CONFIG.OPENAI.MODELS.DEFAULT;
+    const temperature = promptData?.temperature || CONFIG.OPENAI.TEMPERATURE.BALANCED;
+    
+    // Build prompt (use topic-specific prompt if available)
+    const topicPrompt = topicPrompts.find(p => p.topic_name === topic.name);
+    const prompt = topicPrompt?.prompt_content || buildDefaultPrompt(topic);
+    
+    let exerciseData;
+    let retries = 0;
+    const maxRetries = CONFIG.EXERCISE.RETRY_LIMIT;
+    
+    while (retries <= maxRetries) {
+      try {
+        // Generate exercise
+        exerciseData = await OpenAI.call(apiKey, prompt, {
+          model,
+          temperature,
+          schema: EXERCISE_SCHEMA,
+          schemaName: 'exercise_generation'
+        });
+        
+        // Client-side validation
+        const clientErrors = validateExerciseData(exerciseData);
+        
+        if (clientErrors.length > 0 && retries < maxRetries) {
+          console.warn('Client validation failed, retrying:', clientErrors);
+          retries++;
+          continue;
+        }
+        
+        // AI validation
+        const validation = await validateWithAI(exerciseData, apiKey);
+        
+        // Apply fixes if validator provided them
+        if (!validation.valid && validation.fixed_items?.length > 0) {
+          console.log('Applying AI validator fixes');
+          validation.fixed_items.forEach(fix => {
+            if (fix.index >= 0 && fix.index < exerciseData.items.length) {
+              exerciseData.items[fix.index] = fix.item;
+            }
+          });
+        }
+        
+        // Success
+        return exerciseData;
+        
+      } catch (err) {
+        retries++;
+        if (retries > maxRetries) {
+          throw err;
+        }
+        console.warn(`Generation attempt ${retries} failed:`, err);
+      }
+    }
+    
+    throw new Error('Exercise generation failed after retries');
+  }
+  
+  /**
+   * Build default prompt for topic
+   * @param {Object} topic - Topic object
+   * @returns {string} Prompt text
+   */
+  function buildDefaultPrompt(topic) {
+    return DEFAULT_PROMPT + `\n\nTopic: ${topic.name}\n\nGenerate ${CONFIG.EXERCISE.MIN_QUESTIONS}-${CONFIG.EXERCISE.MAX_QUESTIONS} exercises for this topic.`;
+  }
+  
+  /**
+   * Grade exercise answers
+   * @param {Object} exercise - Exercise data
+   * @param {Object} answers - User answers
+   * @returns {Promise<Array>} Grading results
+   */
+  async function grade(exercise, answers) {
+    const apiKey = await OpenAI.getActiveApiKey();
+    if (!apiKey) {
+      throw new Error(CONFIG.MESSAGES.ERROR_NO_API_KEY);
+    }
+    
+    const gradingPromptData = systemPrompts['grading'];
+    const model = gradingPromptData?.model || CONFIG.OPENAI.MODELS.DEFAULT;
+    const temperature = gradingPromptData?.temperature || CONFIG.OPENAI.TEMPERATURE.GRADING;
+    
+    // Prepare answers for grading
+    const normalizedAnswers = exercise.items.map((item, i) => ({
+      given: answers[i] || '',
+      canonical: item.canonical_answer || item.answer || '',
+      variants: item.accepted_variants || [],
+      type: item.type,
+      grammarCategory: item.grammar_category
+    }));
+    
+    // Build grading prompt
+    const prompt = buildGradingPrompt(normalizedAnswers);
+    
+    try {
+      const grading = await OpenAI.call(apiKey, prompt, {
+        model,
+        temperature,
+        schema: GRADING_SCHEMA,
+        schemaName: 'grading_result'
+      });
+      
+      return grading.results;
+    } catch (err) {
+      console.warn('AI grading failed, using fallback:', err);
+      return fallbackGrading(normalizedAnswers);
+    }
+  }
+  
+  /**
+   * Build grading prompt
+   * @param {Array} answers - Normalized answers
+   * @returns {string} Prompt
+   */
+  function buildGradingPrompt(answers) {
+    return `Grade these Portuguese exercise answers. For each answer, determine if it's correct.
+
+Answers to grade:
+${JSON.stringify(answers, null, 2)}
+
+Rules:
+- Accept canonical answer and all variants
+- Minor typos/accents OK if meaning is clear
+- For choice: exact match only
+- Extract new vocabulary (Portuguese-English pairs)
+- Provide grammar explanations for errors
+
+Return results array with: correct, match_type, explanation, grammar_category, should_store_as_error, vocab.`;
+  }
+  
+  /**
+   * Fallback grading (simple string comparison)
+   * @param {Array} answers - Normalized answers
+   * @returns {Array} Results
+   */
+  function fallbackGrading(answers) {
+    return answers.map(a => {
+      const givenNorm = Utils.normalizeText(a.given);
+      const canonicalNorm = Utils.normalizeText(a.canonical);
+      const variantsNorm = a.variants.map(v => Utils.normalizeText(v));
+      
+      const isCorrect = givenNorm === canonicalNorm || variantsNorm.includes(givenNorm);
+      const matchType = isCorrect 
+        ? (givenNorm === canonicalNorm ? "exact" : "accepted_variant") 
+        : "other";
+      
+      return { 
+        correct: isCorrect,
+        match_type: matchType,
+        explanation: null,
+        grammar_category: null,
+        should_store_as_error: !isCorrect,
+        vocab: []
+      };
+    });
+  }
+  
+  /**
+   * Process grading results and save to database
+   * @param {Object} topic - Topic object
+   * @param {Array} results - Grading results
+   * @param {Array} items - Exercise items
+   * @returns {Promise<Object>} {errorCount, newErrors, newVocab}
+   */
+  async function processGradingResults(topic, results, items) {
+    let errorCount = 0;
+    const newErrors = [];
+    const newVocab = [];
+    
+    for (let i = 0; i < results.length; i++) {
+      const result = results[i];
+      const item = items[i];
+      
+      if (!result.correct && result.should_store_as_error) {
+        errorCount++;
+        
+        // Save error to database
+        const errorText = `Q: ${item.question}\nA: ${currentAnswers[i] || '(blank)'}`;
+        const savedError = await Database.errors.create(
+          topic.id,
+          errorText,
+          result.explanation || 'No explanation provided',
+          result.grammar_category || item.grammar_category || 'General'
+        );
+        
+        if (savedError) {
+          newErrors.push(savedError);
+        }
+      }
+      
+      // Save vocabulary
+      if (result.vocab && Array.isArray(result.vocab)) {
+        for (const word of result.vocab) {
+          if (word.pt && word.en) {
+            const savedVocab = await Database.vocab.create(topic.id, word.pt, word.en);
+            if (savedVocab) {
+              newVocab.push(savedVocab);
+            }
+          }
+        }
+      }
+    }
+    
+    return { errorCount, newErrors, newVocab };
+  }
+  
+  // Public API
+  return {
+    generate,
+    grade,
+    validateExerciseData,
+    validateWithAI,
+    processGradingResults,
+    isValidChoiceItem,
+    hasDuplicateQuestions
+  };
+})();
+
+/**
+ * Authentication Module
+ * User authentication and session management
+ */
+const Auth = (() => {
+  let isLoggingIn = false;
+  let loginComplete = false;
+  
+  /**
+   * Initialize authentication session
+   * @returns {Promise<void>}
+   */
+  async function initializeSession() {
+    const { data: { session } } = await sb.auth.getSession();
+    
+    // Setup auth state listener for FUTURE changes only
+    sb.auth.onAuthStateChange(async (event, session) => {
+      console.log('Auth state changed:', event, 'session:', !!session);
+      
+      // Skip initial session event
+      if (event === 'INITIAL_SESSION') {
+        console.log('Skipping INITIAL_SESSION (already processed)');
+        return;
+      }
+      
+      if (session) {
+        await login(session.user);
+      } else {
+        logout();
+      }
+    });
+    
+    // Handle initial session manually
+    if (session) {
+      console.log('Initial session found, logging in...');
+      await login(session.user);
+    } else {
+      console.log('No initial session');
+    }
+  }
+  
+  /**
+   * Login user and load data
+   * @param {Object} user - User object from Supabase
+   * @returns {Promise<void>}
+   */
+  async function login(user) {
+    console.log('=== Login called ===');
+    console.log('User:', user.email);
+    console.log('isLoggingIn:', isLoggingIn);
+    console.log('loginComplete:', loginComplete);
+    
+    // If already logged in, just refresh user info (token refresh)
+    if (loginComplete && !isLoggingIn) {
+      console.log('✓ Already logged in, skipping full reload (token refresh)');
+      currentUser = user;
+      const emailEl = document.getElementById('user-email-label');
+      if (emailEl) emailEl.textContent = user.email;
+      return;
+    }
+    
+    // Prevent concurrent login attempts
+    if (isLoggingIn) {
+      console.log('⚠️ Login already in progress, skipping...');
+      return;
+    }
+    
+    isLoggingIn = true;
+    loginComplete = false;
+    console.log('✓ Starting login process...');
+    
+    try {
+      currentUser = user;
+      
+      // Hide auth screen, show app
+      const authScreen = document.getElementById('auth-screen');
+      const app = document.getElementById('app');
+      const emailLabel = document.getElementById('user-email-label');
+      
+      if (authScreen) authScreen.style.display = 'none';
+      if (app) app.style.display = 'grid';
+      if (emailLabel) emailLabel.textContent = user.email;
+      
+      // Show loading overlay
+      const loadingOverlay = createLoadingOverlay();
+      document.body.appendChild(loadingOverlay);
+      
+      // Check admin status
+      isAdmin = await Database.admin.isAdmin(user.id);
+      console.log('Admin status:', isAdmin);
+      
+      // Show/hide admin button
+      const adminBtn = document.getElementById('fn-admin');
+      if (adminBtn) {
+        adminBtn.style.display = isAdmin ? 'block' : 'none';
+      }
+      
+      // Load system prompts from DB
+      await loadSystemPrompts();
+      
+      // Load topic prompts from DB
+      await loadTopicPrompts();
+      
+      // Load exam prompts from DB
+      await loadExamPrompts();
+      
+      // Load global API key
+      await loadGlobalApiKey();
+      
+      // Load final exams
+      await loadFinalExams();
+      
+      // Load all user data
+      console.log('✓ Loading all data...');
+      await loadAllData();
+      console.log('✓ Topics loaded:', topics.length);
+      
+      // Show home view
+      console.log('✓ Showing home...');
+      showHome();
+      
+      console.log('✓ Login complete!');
+      loginComplete = true;
+      
+      // Remove loading overlay
+      const overlay = document.getElementById(CONFIG.UI.LOADING_OVERLAY_ID);
+      if (overlay) overlay.remove();
+      
+    } catch (err) {
+      console.error('❌ Error during login:', err);
+      loginComplete = false;
+      
+      // Remove loading overlay on error
+      const overlay = document.getElementById(CONFIG.UI.LOADING_OVERLAY_ID);
+      if (overlay) overlay.remove();
+      
+      ErrorHandler.handle(err, { module: 'Auth', operation: 'login' });
+    } finally {
+      isLoggingIn = false;
+      console.log('✓ isLoggingIn reset to false');
+    }
+  }
+  
+  /**
+   * Logout user
+   * @returns {void}
+   */
+  function logout() {
+    currentUser = null;
+    topics = [];
+    isLoggingIn = false;
+    loginComplete = false;
+    
+    const authScreen = document.getElementById('auth-screen');
+    const app = document.getElementById('app');
+    
+    if (authScreen) authScreen.style.display = 'flex';
+    if (app) app.style.display = 'none';
+  }
+  
+  /**
+   * Create loading overlay element
+   * @returns {HTMLElement} Loading overlay
+   */
+  function createLoadingOverlay() {
+    const overlay = document.createElement('div');
+    overlay.id = CONFIG.UI.LOADING_OVERLAY_ID;
+    overlay.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(255,255,255,0.9);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+      font-family: 'Geist Mono', monospace;
+      font-size: 14px;
+      color: var(--ink2);
+    `;
+    overlay.textContent = CONFIG.MESSAGES.LOADING;
+    return overlay;
+  }
+  
+  /**
+   * Handle signup
+   * @param {string} email - Email
+   * @param {string} password - Password
+   * @returns {Promise<Object>} Result {success, error}
+   */
+  async function signup(email, password) {
+    try {
+      const { data, error } = await sb.auth.signUp({ email, password });
+      
+      if (error) throw error;
+      
+      return { 
+        success: true, 
+        message: 'Check your email for verification link' 
+      };
+    } catch (err) {
+      return { 
+        success: false, 
+        error: err.message 
+      };
+    }
+  }
+  
+  /**
+   * Handle signin
+   * @param {string} email - Email
+   * @param {string} password - Password
+   * @returns {Promise<Object>} Result {success, error}
+   */
+  async function signin(email, password) {
+    try {
+      const { data, error } = await sb.auth.signInWithPassword({ 
+        email, 
+        password 
+      });
+      
+      if (error) throw error;
+      
+      return { success: true };
+    } catch (err) {
+      return { 
+        success: false, 
+        error: err.message 
+      };
+    }
+  }
+  
+  /**
+   * Handle signout
+   * @returns {Promise<void>}
+   */
+  async function signout() {
+    await sb.auth.signOut();
+    logout();
+  }
+  
+  // Public API
+  return {
+    initializeSession,
+    login,
+    logout,
+    signup,
+    signin,
+    signout
+  };
+})();
+
+/**
+ * Exam System Module
+ * Final exam generation, grading, and management
+ */
+const ExamSystem = (() => {
+  /**
+   * Check if unit is ready for exam
+   * @param {number} unitNumber - Unit number
+   * @returns {Object} {ready: boolean, reason: string, topics: Array}
+   */
+  function isUnitReady(unitNumber) {
+    return Utils.isUnitReadyForExam(unitNumber, topics);
+  }
+  
+  /**
+   * Get final exam for unit
+   * @param {string} unitKey - Unit key (e.g., 'unit1')
+   * @returns {Object|null} Exam data or null
+   */
+  function getExam(unitKey) {
+    return finalExams.find(exam => exam.unit_key === unitKey) || null;
+  }
+  
+  /**
+   * Generate final exam
+   * @param {number} unitNumber - Unit number
+   * @returns {Promise<Object|null>} Exam data or null
+   */
+  async function generate(unitNumber) {
+    const unitName = `Unidade ${unitNumber}`;
+    const unitKey = `unit${unitNumber}`;
+    
+    // Get API key
+    const apiKey = await OpenAI.getActiveApiKey();
+    if (!apiKey) {
+      toast(CONFIG.MESSAGES.ERROR_NO_API_KEY);
+      return null;
+    }
+    
+    toast('Generating final exam...');
+    
+    // Get exam prompt from database
+    const examPrompt = examPrompts.find(p => p.unit_key === unitKey);
+    
+    if (!examPrompt) {
+      alert(`No exam prompt found for ${unitName}.\n\nPlease ask admin to create exam prompt in Admin Panel → Exam Prompts.`);
+      return null;
+    }
+    
+    const prompt = examPrompt.prompt_content;
+    
+    try {
+      const response = await OpenAI.call(apiKey, prompt, {
+        model: CONFIG.OPENAI.MODELS.DEFAULT,
+        temperature: CONFIG.OPENAI.TEMPERATURE.BALANCED,
+        schema: EXERCISE_SCHEMA,
+        schemaName: 'final_exam_generation'
+      });
+      
+      if (!response || !response.items || response.items.length === 0) {
+        toast('Error: Invalid exam generated');
+        return null;
+      }
+      
+      // Save to database
+      const { data: examData, error } = await sb
+        .from('final_exams')
+        .insert({
+          user_id: currentUser.id,
+          unit_name: unitName,
+          unit_key: unitKey,
+          questions: response.items,
+          best_score: 0,
+          attempts: 0
+        })
+        .select()
+        .single();
+      
+      if (error) {
+        return ErrorHandler.handle(error, {
+          module: 'ExamSystem',
+          operation: 'save exam',
+          message: 'Error saving exam'
+        });
+      }
+      
+      // Add to cache
+      finalExams.push(examData);
+      
+      toast(`Final exam generated: ${response.items.length} questions`);
+      return examData;
+      
+    } catch (err) {
+      return ErrorHandler.handle(err, {
+        module: 'ExamSystem',
+        operation: 'generate exam'
+      });
+    }
+  }
+  
+  /**
+   * Grade final exam
+   * @param {Object} exam - Exam object
+   * @param {Object} userAnswers - User answers {index: answer}
+   * @returns {Promise<Object|null>} Grading results or null
+   */
+  async function grade(exam, userAnswers) {
+    const apiKey = await OpenAI.getActiveApiKey();
+    if (!apiKey) {
+      toast(CONFIG.MESSAGES.ERROR_NO_API_KEY);
+      return null;
+    }
+    
+    toast('Grading exam...');
+    
+    // Get grading prompt settings
+    const examGradingPromptData = systemPrompts['exam_grading'];
+    const model = examGradingPromptData?.model || CONFIG.OPENAI.MODELS.DEFAULT;
+    const temperature = examGradingPromptData?.temperature || CONFIG.OPENAI.TEMPERATURE.GRADING;
+    const customPrompt = examGradingPromptData?.content;
+    
+    // Build grading data
+    const questionsWithAnswers = exam.questions.map((q, idx) => ({
+      question: q.question,
+      type: q.type,
+      user_answer: userAnswers[idx],
+      canonical_answer: q.canonical_answer,
+      accepted_variants: q.accepted_variants,
+      options: q.options,
+      grammar_category: q.grammar_category
+    }));
+    
+    // Build prompt
+    const defaultPrompt = `Grade this European Portuguese final exam.
+
+Questions and user answers:
+${JSON.stringify(questionsWithAnswers, null, 2)}
+
+For each question, determine if the user's answer is correct.
+
+GRADING RULES:
+- For fill/translate/transform/correct: accept canonical_answer AND accepted_variants
+- Minor typos/accents are OK if meaning is clear
+- For choice: only the letter must match exactly
+- Be lenient with spacing and capitalization
+- Mark as correct if answer is semantically equivalent
+
+Return ONLY valid JSON:
+{
+  "results": [
+    {
+      "question_index": 0,
+      "is_correct": true,
+      "user_answer": "...",
+      "canonical_answer": "...",
+      "feedback": "Correct! / Incorrect. The correct answer is..."
+    }
+  ],
+  "total_questions": 20,
+  "correct_count": 15,
+  "score": 75
+}`;
+
+    const prompt = customPrompt 
+      ? customPrompt.replace('{{DATA}}', JSON.stringify(questionsWithAnswers, null, 2))
+      : defaultPrompt;
+    
+    try {
+      // Define grading schema
+      const gradingSchema = {
+        type: "object",
+        required: ["results", "total_questions", "correct_count", "score"],
+        properties: {
+          results: {
+            type: "array",
+            items: {
+              type: "object",
+              required: ["question_index", "is_correct", "user_answer", "canonical_answer", "feedback"],
+              properties: {
+                question_index: { type: "integer" },
+                is_correct: { type: "boolean" },
+                user_answer: { type: "string" },
+                canonical_answer: { type: "string" },
+                feedback: { type: "string" }
+              },
+              additionalProperties: false
+            }
+          },
+          total_questions: { type: "integer" },
+          correct_count: { type: "integer" },
+          score: { type: "integer" }
+        },
+        additionalProperties: false
+      };
+      
+      const response = await OpenAI.call(apiKey, prompt, {
+        model,
+        temperature,
+        schema: gradingSchema,
+        schemaName: 'exam_grading'
+      });
+      
+      if (!response || !response.results) {
+        throw new Error('Invalid grading response');
+      }
+      
+      return response;
+      
+    } catch (err) {
+      return ErrorHandler.handle(err, {
+        module: 'ExamSystem',
+        operation: 'grade exam'
+      });
+    }
+  }
+  
+  /**
+   * Save exam attempt to database
+   * @param {string} examId - Exam ID
+   * @param {Object} results - Grading results
+   * @returns {Promise<boolean>} Success status
+   */
+  async function saveAttempt(examId, results) {
+    const score = results.score;
+    const currentExam = finalExams.find(e => e.id === examId);
+    
+    if (!currentExam) {
+      console.error('Exam not found:', examId);
+      return false;
+    }
+    
+    const updateData = {
+      attempts: currentExam.attempts + 1,
+      last_attempt_at: new Date().toISOString()
+    };
+    
+    // Update best score if better
+    if (score > currentExam.best_score) {
+      updateData.best_score = score;
+    }
+    
+    try {
+      const { error } = await sb
+        .from('final_exams')
+        .update(updateData)
+        .eq('id', examId);
+      
+      if (error) throw error;
+      
+      // Update cache
+      currentExam.attempts = updateData.attempts;
+      currentExam.last_attempt_at = updateData.last_attempt_at;
+      if (updateData.best_score) {
+        currentExam.best_score = updateData.best_score;
+      }
+      
+      return true;
+      
+    } catch (err) {
+      return ErrorHandler.handle(err, {
+        module: 'ExamSystem',
+        operation: 'save attempt',
+        silent: false
+      });
+    }
+  }
+  
+  // Public API
+  return {
+    isUnitReady,
+    getExam,
+    generate,
+    grade,
+    saveAttempt
+  };
+})();
+
+/**
+ * Admin Panel Module
+ * Administrative operations
+ */
+const AdminPanel = (() => {
+  /**
+   * Save global API key
+   * @param {string} apiKey - API key
+   * @returns {Promise<boolean>} Success status
+   */
+  async function saveGlobalApiKey(apiKey) {
+    if (!currentUser) return false;
+    
+    const success = await Database.system.setGlobalApiKey(apiKey, currentUser.id);
+    
+    if (success) {
+      globalApiKey = apiKey;
+      toast(CONFIG.MESSAGES.SUCCESS_SAVED);
+      return true;
+    }
+    
+    return false;
+  }
+  
+  /**
+   * Load global API key for display
+   * @returns {Promise<string>} Masked API key or empty string
+   */
+  async function loadGlobalApiKey() {
+    const key = await Database.system.getGlobalApiKey();
+    
+    if (key) {
+      globalApiKey = key;
+      return '••••••••' + key.slice(-4);
+    }
+    
+    return '';
+  }
+  
+  /**
+   * Save system prompt
+   * @param {string} promptType - Prompt type
+   * @param {string} content - Prompt content
+   * @param {string} model - Model name
+   * @param {number} temperature - Temperature
+   * @returns {Promise<boolean>} Success status
+   */
+  async function saveSystemPrompt(promptType, content, model, temperature) {
+    const success = await Database.system.updatePrompt(
+      promptType,
+      content,
+      model,
+      temperature
+    );
+    
+    if (success) {
+      // Update cache
+      systemPrompts[promptType] = { prompt_type: promptType, content, model, temperature };
+      toast(CONFIG.MESSAGES.SUCCESS_SAVED);
+      return true;
+    }
+    
+    return false;
+  }
+  
+  /**
+   * Load all system prompts
+   * @returns {Promise<void>}
+   */
+  async function loadSystemPrompts() {
+    const prompts = await Database.system.getPrompts();
+    
+    if (prompts) {
+      systemPrompts = {};
+      prompts.forEach(p => {
+        systemPrompts[p.prompt_type] = p;
+      });
+    }
+  }
+  
+  /**
+   * Create topic prompt
+   * @param {string} topicName - Topic name
+   * @param {string} category - Category (unit1, unit2, etc.)
+   * @param {string} content - Prompt content
+   * @returns {Promise<Object|null>} Created prompt or null
+   */
+  async function createTopicPrompt(topicName, category, content) {
+    try {
+      const { data, error } = await sb
+        .from('topic_prompts')
+        .insert({
+          topic_name: topicName,
+          category,
+          prompt_content: content
+        })
+        .select()
+        .single();
+      
+      if (error) throw error;
+      
+      topicPrompts.push(data);
+      toast(CONFIG.MESSAGES.SUCCESS_SAVED);
+      return data;
+      
+    } catch (err) {
+      return ErrorHandler.handle(err, {
+        module: 'AdminPanel',
+        operation: 'create topic prompt'
+      });
+    }
+  }
+  
+  /**
+   * Update topic prompt
+   * @param {string} id - Prompt ID
+   * @param {Object} updates - Updates {topic_name, category, prompt_content}
+   * @returns {Promise<boolean>} Success status
+   */
+  async function updateTopicPrompt(id, updates) {
+    try {
+      const { error } = await sb
+        .from('topic_prompts')
+        .update({
+          ...updates,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', id);
+      
+      if (error) throw error;
+      
+      // Update cache
+      const prompt = topicPrompts.find(p => p.id === id);
+      if (prompt) {
+        Object.assign(prompt, updates);
+      }
+      
+      toast(CONFIG.MESSAGES.SUCCESS_SAVED);
+      return true;
+      
+    } catch (err) {
+      return ErrorHandler.handle(err, {
+        module: 'AdminPanel',
+        operation: 'update topic prompt'
+      });
+    }
+  }
+  
+  /**
+   * Delete topic prompt
+   * @param {string} id - Prompt ID
+   * @returns {Promise<boolean>} Success status
+   */
+  async function deleteTopicPrompt(id) {
+    try {
+      const { error } = await sb
+        .from('topic_prompts')
+        .delete()
+        .eq('id', id);
+      
+      if (error) throw error;
+      
+      // Remove from cache
+      const index = topicPrompts.findIndex(p => p.id === id);
+      if (index !== -1) {
+        topicPrompts.splice(index, 1);
+      }
+      
+      toast('Deleted successfully');
+      return true;
+      
+    } catch (err) {
+      return ErrorHandler.handle(err, {
+        module: 'AdminPanel',
+        operation: 'delete topic prompt'
+      });
+    }
+  }
+  
+  // Public API
+  return {
+    saveGlobalApiKey,
+    loadGlobalApiKey,
+    saveSystemPrompt,
+    loadSystemPrompts,
+    createTopicPrompt,
+    updateTopicPrompt,
+    deleteTopicPrompt
+  };
+})();
+
+// ══════════════════════════════════════════════════════
+
+// ══════════════════════════════════════════════════════
+// UI CONTROLLERS
+// ══════════════════════════════════════════════════════
+
+// ────────────────────────────────────────────────────────
+// Sidebar Controller
+// ────────────────────────────────────────────────────────
+const SidebarController = (() => {
+  function render() {
+    const el = document.getElementById('sidebar-topics');
+    if (topics.length === 0) { el.innerHTML = ''; return; }
+    
+    const grouped = {};
+    topics.forEach(t => {
+      const unitKey = t.unit || 'Other';
+      if (!grouped[unitKey]) grouped[unitKey] = [];
+      grouped[unitKey].push(t);
+    });
+    
+    const sortedUnits = Object.keys(grouped).sort((a, b) => {
+      if (a === 'Other') return 1;
+      if (b === 'Other') return -1;
+      const aNum = parseInt(a.match(/\d+/)?.[0] || '999');
+      const bNum = parseInt(b.match(/\d+/)?.[0] || '999');
+      return aNum - bNum;
+    });
+    
+    let html = '';
+    sortedUnits.forEach(unitKey => {
+      const unitTopics = grouped[unitKey];
+      const unitMatch = unitKey.match(/Unidade (\d+)/);
+      let examBadge = '';
+      
+      if (unitMatch) {
+        const unitNumber = parseInt(unitMatch[1]);
+        const readiness = isUnitReadyForExam(unitNumber);
+        const exam = getFinalExam(`unit${unitNumber}`);
+        
+        if (readiness.ready) {
+          if (exam && exam.best_score >= 80) {
+            examBadge = ` <span class="final-exam-badge passed" onclick="event.stopPropagation();startFinalExam(${unitNumber})" title="Final Exam: ${exam.best_score}%">🎓</span>`;
+          } else if (exam) {
+            examBadge = ` <span class="final-exam-badge available" onclick="event.stopPropagation();startFinalExam(${unitNumber})" title="Final Exam Available (${exam.attempts} attempts)">🎓</span>`;
+          } else {
+            examBadge = ` <span class="final-exam-badge ready" onclick="event.stopPropagation();startFinalExam(${unitNumber})" title="Final Exam Available">🎓</span>`;
+          }
+        }
+      }
+      
+      html += `<div class="sidebar-unit-header">${unitKey}${examBadge}</div>`;
+      unitTopics.forEach(t => {
+        const pct = computeProgress(t);
+        const active = t.id === currentTopicId ? ' active' : '';
+        const pillClass = pct === 100 ? ' done' : '';
+        html += `<button class="nav-btn${active}" onclick="showTopicDetail(${t.id})" style="position:relative;padding-right:32px;">
+          <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left">${t.name}</span>
+          <span class="progress-pill${pillClass}">${pct}%</span>
+          <span onclick="event.stopPropagation();deleteTopic(${t.id},'${t.name.replace(/'/g,"\\'")}');" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);opacity:0;transition:opacity .15s;color:var(--red);cursor:pointer;font-size:18px;line-height:1;padding:2px 4px;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.6'" class="delete-topic-btn">×</span>
+        </button>`;
+      });
+    });
+    
+    el.innerHTML = html;
+  }
+  
+  function renderHome() {
+    const el = document.getElementById('home-topic-list');
+    if (!topics.length) { 
+      el.innerHTML = '<div class="empty">No topics yet. Add your first topic to get started.</div>'; 
+      return; 
+    }
+    
+    el.innerHTML = topics.map(t => {
+      const pct = computeProgress(t);
+      return `<div class="topic-card" onclick="showTopicDetail(${t.id})">
+        <div class="tc-left">
+          <div class="topic-unit">${t.unit || ''}</div>
+          <div class="topic-name">${t.name}</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;flex-shrink:0;">
+          <div class="prog-bar-wrap"><div class="prog-bar-fill${pct===100?' done':''}" style="width:${pct}%"></div></div>
+          <div class="prog-pct${pct===100?' done':''}">${pct}%</div>
+        </div>
+      </div>`;
+    }).join('');
+  }
+  
+  return { render, renderHome };
+})();
+
+// ────────────────────────────────────────────────────────
+// Topic Detail Controller
+// ────────────────────────────────────────────────────────
+const TopicDetailController = (() => {
+  function renderVocabList(topic) {
+    const el = document.getElementById('vocab-list');
+    if (!topic.vocab || !topic.vocab.length) {
+      el.innerHTML = '<div class="empty">No vocabulary yet. Complete exercises to add words.</div>';
+      return;
+    }
+    
+    el.innerHTML = topic.vocab.map(v => `
+      <div class="vocab-item">
+        <div class="vocab-pt">${v.pt}</div>
+        <div class="vocab-en">${v.en}</div>
+        <button class="vocab-del" onclick="deleteVocabWord(${v.id})" title="Delete">×</button>
+      </div>
+    `).join('');
+  }
+  
+  function renderErrorsList(topic) {
+    const el = document.getElementById('errors-list');
+    const unfixed = (topic.errors || []).filter(e => !e.fixed);
+    
+    if (!unfixed.length) {
+      el.innerHTML = '<div class="empty">✓ No active errors. Great work!</div>';
+      return;
+    }
+    
+    el.innerHTML = unfixed.map(e => {
+      const explanationHTML = e.explanation ? 
+        `<div class="err-explain">${e.explanation}</div>` : '';
+      
+      return `
+        <div class="error-card">
+          <div class="err-row">
+            <div class="err-label">Question:</div>
+            <div class="err-val">${e.question}</div>
+          </div>
+          <div class="err-row">
+            <div class="err-label">Your answer:</div>
+            <div class="err-val err-wrong">${e.user_answer}</div>
+          </div>
+          <div class="err-row">
+            <div class="err-label">Correct:</div>
+            <div class="err-val err-right">${e.correct_answer}</div>
+          </div>
+          ${explanationHTML}
+          <div class="err-actions">
+            <button class="err-btn fix" onclick="deleteError(${e.id})">Mark as Fixed</button>
+            <button class="err-btn unfix" onclick="unfixError(${e.id})">Review Again Later</button>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+  
+  function renderOverview(explainData) {
+    const el = document.getElementById('overview-content');
+    
+    let html = '<div class="overview-body">';
+    
+    if (explainData.grammar_rules && explainData.grammar_rules.length) {
+      html += '<h3>Grammar Rules</h3><ul class="rules-list">';
+      explainData.grammar_rules.forEach(rule => {
+        html += `<li><strong>${rule.rule}:</strong> ${rule.explanation}`;
+        if (rule.examples && rule.examples.length) {
+          html += '<ul class="examples-list">';
+          rule.examples.forEach(ex => {
+            html += `<li><span class="ex-pt">${ex.portuguese}</span> → <span class="ex-en">${ex.english}</span></li>`;
+          });
+          html += '</ul>';
+        }
+        html += '</li>';
+      });
+      html += '</ul>';
+    }
+    
+    if (explainData.verb_conjugations && explainData.verb_conjugations.length) {
+      html += '<h3>Verb Conjugations</h3>';
+      explainData.verb_conjugations.forEach(verb => {
+        html += `<div class="verb-block"><h4>${verb.verb} (${verb.tense})</h4><table class="conj-table">`;
+        verb.conjugations.forEach(c => {
+          html += `<tr><td class="conj-pronoun">${c.pronoun}</td><td class="conj-form">${c.form}</td></tr>`;
+        });
+        html += '</table></div>';
+      });
+    }
+    
+    if (explainData.common_phrases && explainData.common_phrases.length) {
+      html += '<h3>Common Phrases</h3><ul class="phrases-list">';
+      explainData.common_phrases.forEach(phrase => {
+        html += `<li><span class="phrase-pt">${phrase.portuguese}</span> → <span class="phrase-en">${phrase.english}</span></li>`;
+      });
+      html += '</ul>';
+    }
+    
+    html += '</div>';
+    el.innerHTML = html;
+  }
+  
+  return { renderVocabList, renderErrorsList, renderOverview };
+})();
+
+// ────────────────────────────────────────────────────────
+// Admin View Controller
+// ────────────────────────────────────────────────────────
+const AdminViewController = (() => {
+  async function loadPanel() {
+    const { data: settings } = await sb.from('system_settings').select('*');
+    
+    settings?.forEach(s => {
+      if (s.setting_key === 'global_api_key') {
+        const input = document.getElementById('admin-global-key');
+        if (input) {
+          const key = s.setting_value || '';
+          input.value = key ? '••••••••' + key.slice(-4) : '';
+        }
+        
+        const status = document.getElementById('global-key-status');
+        if (status) {
+          if (s.setting_value) {
+            status.textContent = 'Set ✓';
+            status.className = 'key-status set';
+          } else {
+            status.textContent = 'Not set';
+            status.className = 'key-status unset';
+          }
+        }
+      }
+    });
+    
+    const promptTypes = ['default', 'overview', 'grading', 'validator', 'exam_grading'];
+    for (const type of promptTypes) {
+      const promptData = systemPrompts[type === 'overview' ? 'topic_overview' : type];
+      if (promptData) {
+        const textareaId = `admin-prompt-${type}`;
+        const modelId = `admin-prompt-${type}-model`;
+        const tempId = `admin-prompt-${type}-temp`;
+        
+        const textarea = document.getElementById(textareaId);
+        const modelSelect = document.getElementById(modelId);
+        const tempInput = document.getElementById(tempId);
+        
+        if (textarea) textarea.value = promptData.content;
+        if (modelSelect) modelSelect.value = promptData.model;
+        if (tempInput) tempInput.value = promptData.temperature;
+      }
+    }
+  }
+  
+  async function renderTopicPrompts() {
+    const { data: prompts, error } = await sb
+      .from('topic_prompts')
+      .select('*')
+      .order('category', { ascending: true })
+      .order('name', { ascending: true });
+    
+    if (error) {
+      console.error('Error loading topic prompts:', error);
+      return;
+    }
+    
+    const tbody = document.getElementById('topic-prompts-tbody');
+    if (!tbody) return;
+    
+    if (!prompts || prompts.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:2rem;color:var(--ink3);">No topic prompts yet. Create one above.</td></tr>';
+      return;
+    }
+    
+    tbody.innerHTML = prompts.map(p => `
+      <tr>
+        <td>${p.category || 'General'}</td>
+        <td><strong>${p.name}</strong></td>
+        <td style="max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${p.content.substring(0, 100)}...</td>
+        <td>
+          <button class="admin-btn-sm" onclick="editTopicPrompt(${p.id})">Edit</button>
+          <button class="admin-btn-sm danger" onclick="deleteTopicPrompt(${p.id}, '${p.name.replace(/'/g, "\'")}')">Delete</button>
+        </td>
+      </tr>
+    `).join('');
+  }
+  
+  async function renderExamPrompts() {
+    const { data: prompts, error } = await sb
+      .from('exam_prompts')
+      .select('*')
+      .order('exam_key', { ascending: true });
+    
+    if (error) {
+      console.error('Error loading exam prompts:', error);
+      return;
+    }
+    
+    const tbody = document.getElementById('exam-prompts-tbody');
+    if (!tbody) return;
+    
+    if (!prompts || prompts.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:2rem;color:var(--ink3);">No exam prompts yet. Create one above.</td></tr>';
+      return;
+    }
+    
+    tbody.innerHTML = prompts.map(p => `
+      <tr>
+        <td><strong>${p.exam_key}</strong></td>
+        <td style="max-width:400px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${p.content.substring(0, 150)}...</td>
+        <td>
+          <button class="admin-btn-sm" onclick="editExamPrompt(${p.id})">Edit</button>
+          <button class="admin-btn-sm danger" onclick="deleteExamPrompt(${p.id}, '${p.exam_key.replace(/'/g, "\'")}')">Delete</button>
+        </td>
+      </tr>
+    `).join('');
+  }
+  
+  return { loadPanel, renderTopicPrompts, renderExamPrompts };
+})();
+
+// ────────────────────────────────────────────────────────
+// Exam View Controller
+// ────────────────────────────────────────────────────────
+const ExamViewController = (() => {
+  function renderTaking(exam) {
+    const data = typeof exam.exam_data === 'string' ? JSON.parse(exam.exam_data) : exam.exam_data;
+    
+    document.getElementById('exam-title').textContent = `Final Exam — ${exam.exam_key.replace('unit', 'Unidade ')}`;
+    document.getElementById('exam-instructions').textContent = data.instructions || 'Complete all questions to the best of your ability.';
+    
+    const questionsContainer = document.getElementById('exam-questions');
+    questionsContainer.innerHTML = data.items.map((item, idx) => {
+      const qNum = idx + 1;
+      let inputHTML = '';
+      
+      if (item.type === 'choice' && item.options) {
+        inputHTML = item.options.map(opt => 
+          `<label class="exam-choice"><input type="radio" name="exam_q${qNum}" value="${opt}"> ${opt}</label>`
+        ).join('');
+      } else {
+        inputHTML = `<input type="text" class="exam-input" id="exam_ans_${qNum}" placeholder="Your answer...">`;
+      }
+      
+      return `
+        <div class="exam-question">
+          <div class="exam-q-num">Question ${qNum}</div>
+          <div class="exam-q-text">${item.question}</div>
+          <div class="exam-q-input">${inputHTML}</div>
+        </div>
+      `;
+    }).join('');
+  }
+  
+  function renderResults(exam, results, userAnswers) {
+    const data = typeof exam.exam_data === 'string' ? JSON.parse(exam.exam_data) : exam.exam_data;
+    
+    document.getElementById('exam-result-score').textContent = `${results.score}%`;
+    document.getElementById('exam-result-feedback').textContent = results.feedback || '';
+    
+    const passed = results.score >= 80;
+    const banner = document.getElementById('exam-result-banner');
+    banner.className = passed ? 'exam-result-banner pass' : 'exam-result-banner fail';
+    
+    const breakdown = document.getElementById('exam-result-breakdown');
+    breakdown.innerHTML = results.results.map((r, idx) => {
+      const item = data.items[idx];
+      const userAnswer = userAnswers[idx];
+      
+      return `
+        <div class="exam-result-item ${r.correct ? 'correct' : 'incorrect'}">
+          <div class="exam-result-q">
+            <strong>Q${idx + 1}:</strong> ${item.question}
+          </div>
+          <div class="exam-result-a">
+            <div class="exam-result-label">Your answer:</div>
+            <div class="exam-result-value ${r.correct ? 'correct' : 'wrong'}">${userAnswer}</div>
+          </div>
+          ${!r.correct ? `
+            <div class="exam-result-a">
+              <div class="exam-result-label">Correct answer:</div>
+              <div class="exam-result-value correct">${item.canonical_answer}</div>
+            </div>
+          ` : ''}
+          ${r.explanation ? `
+            <div class="exam-result-explain">${r.explanation}</div>
+          ` : ''}
+        </div>
+      `;
+    }).join('');
+  }
+  
+  return { renderTaking, renderResults };
+})();
+
+
 // UI HELPERS
 // ══════════════════════════════════════════════════════
 /**
@@ -1397,103 +3694,6 @@ function toast(message, duration = 2500) {
  * Get active API key (user key if set, otherwise global key)
  * @returns {Promise<string|null>} - API key or null
  */
-async function getActiveApiKey() {
-  if (!currentUser) return null;
-  
-  // Check for user's personal key
-  const { data: userSettings, error: userError } = await sb
-    .from('settings')
-    .select('user_api_key')
-    .eq('user_id', currentUser.id)
-    .maybeSingle();
-  
-  if (userError) {
-    console.error('❌ Error loading user settings:', userError);
-  }
-  
-  if (userSettings?.user_api_key) {
-    console.log('Using user personal API key');
-    return userSettings.user_api_key;
-  }
-  
-  // Fallback to global key
-  if (globalApiKey) {
-    console.log('Using global API key');
-    return globalApiKey;
-  }
-  
-  // Load global key from DB if not cached
-  const { data: globalSettings, error: globalError } = await sb
-    .from('system_settings')
-    .select('setting_value')
-    .eq('setting_key', 'global_api_key')
-    .maybeSingle();
-  
-  if (globalError) {
-    console.error('❌ Error loading global API key:', globalError);
-  }
-  
-  globalApiKey = globalSettings?.setting_value || null;
-  
-  if (globalApiKey) {
-    console.log('Loaded and using global API key');
-  } else {
-    console.warn('No API key available (neither user nor global)');
-  }
-  
-  return globalApiKey;
-}
-
-/**
- * Universal OpenAI API caller with structured outputs
- * @param {string} apiKey - OpenAI API key
- * @param {string} prompt - Prompt text
- * @param {Object} options - { model, temperature, schema, schemaName }
- * @returns {Promise<Object>} - Parsed JSON response
- */
-async function callOpenAI(apiKey, prompt, options = {}) {
-  const {
-    model = 'gpt-5.4-mini',
-    temperature = 0,
-    schema = null,
-    schemaName = 'response'
-  } = options;
-
-  const body = {
-    model,
-    temperature,
-    messages: [{ role: 'user', content: prompt }]
-  };
-
-  if (schema) {
-    body.response_format = {
-      type: "json_schema",
-      json_schema: {
-        name: schemaName,
-        strict: true,
-        schema
-      }
-    };
-  }
-
-  const res = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`
-    },
-    body: JSON.stringify(body)
-  });
-
-  const data = await res.json();
-  
-  if (!res.ok) {
-    throw new Error(data.error?.message || `HTTP ${res.status}`);
-  }
-
-  const raw = data.choices[0].message.content.trim();
-  return JSON.parse(raw);
-}
 
 // ══════════════════════════════════════════════════════
 // PROMPT BUILDERS
@@ -2008,11 +4208,11 @@ async function loadAllData() {
   setSyncStatus('syncing...');
   try {
     console.log('Fetching topics, exercises, vocab, errors...');
-    const [{ data: topicsData }, { data: exercisesData }, { data: vocabData }, { data: errorsData }] = await Promise.all([
-      sb.from('topics').select('*').order('id'),
-      sb.from('exercises').select('*').order('created_at'),
-      sb.from('vocab').select('*').order('added_at'),
-      sb.from('errors').select('*').order('created_at')
+    const [topicsData, exercisesData, vocabData, errorsData] = await Promise.all([
+      Database.topics.getAll(currentUser.id),
+      Database.exercises.getAll(currentUser.id),
+      Database.vocab.getAll(currentUser.id),
+      Database.errors.getAll(currentUser.id)
     ]);
     
     console.log('Raw data received:');
@@ -2115,7 +4315,7 @@ async function loadCachedExplanation() {
   const area = document.getElementById('overview-area');
   
   // Check if explanation is cached
-  const { data: cached, error } = await sb.from('explanations').select('*').eq('topic_id', currentTopicId).eq('user_id', currentUser.id).maybeSingle();
+  const { data: cached, error } = await Database.explanations.getByTopicId(currentTopicId, currentUser.id);
   
   if (error) {
     console.error('❌ Error loading cached explanation:', error);
@@ -2236,98 +4436,12 @@ function computeProgress(t) {
 // ══════════════════════════════════════════════════════
 // SIDEBAR
 // ══════════════════════════════════════════════════════
-function renderSidebarTopics() {
-  const el = document.getElementById('sidebar-topics');
-  
-  if (topics.length === 0) {
-    el.innerHTML = '';
-    return;
-  }
-  
-  // Group topics by unit
-  const grouped = {};
-  topics.forEach(t => {
-    const unitKey = t.unit || 'Other';
-    if (!grouped[unitKey]) grouped[unitKey] = [];
-    grouped[unitKey].push(t);
-  });
-  
-  // Sort unit keys (Unidade 1, Unidade 2, ...)
-  const sortedUnits = Object.keys(grouped).sort((a, b) => {
-    if (a === 'Other') return 1;
-    if (b === 'Other') return -1;
-    const aNum = parseInt(a.match(/\d+/)?.[0] || '999');
-    const bNum = parseInt(b.match(/\d+/)?.[0] || '999');
-    return aNum - bNum;
-  });
-  
-  let html = '';
-  
-  sortedUnits.forEach(unitKey => {
-    const unitTopics = grouped[unitKey];
-    
-    // Check if unit is ready for final exam
-    const unitMatch = unitKey.match(/Unidade (\d+)/);
-    let examBadge = '';
-    
-    if (unitMatch) {
-      const unitNumber = parseInt(unitMatch[1]);
-      const readiness = isUnitReadyForExam(unitNumber);
-      const exam = getFinalExam(`unit${unitNumber}`);
-      
-      if (readiness.ready) {
-        if (exam && exam.best_score >= 80) {
-          // Passed
-          examBadge = ` <span class="final-exam-badge passed" onclick="event.stopPropagation();startFinalExam(${unitNumber})" title="Final Exam: ${exam.best_score}%">🎓</span>`;
-        } else if (exam) {
-          // Generated but not passed
-          examBadge = ` <span class="final-exam-badge available" onclick="event.stopPropagation();startFinalExam(${unitNumber})" title="Final Exam Available (${exam.attempts} attempts)">🎓</span>`;
-        } else {
-          // Ready but not generated
-          examBadge = ` <span class="final-exam-badge ready" onclick="event.stopPropagation();startFinalExam(${unitNumber})" title="Final Exam Available">🎓</span>`;
-        }
-      }
-    }
-    
-    // Unit header
-    html += `<div class="sidebar-unit-header">${unitKey}${examBadge}</div>`;
-    
-    // Topics in this unit
-    unitTopics.forEach(t => {
-      const pct = computeProgress(t);
-      const active = t.id === currentTopicId ? ' active' : '';
-      const pillClass = pct === 100 ? ' done' : '';
-      html += `<button class="nav-btn${active}" onclick="showTopicDetail(${t.id})" style="position:relative;padding-right:32px;">
-        <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left">${t.name}</span>
-        <span class="progress-pill${pillClass}">${pct}%</span>
-        <span onclick="event.stopPropagation();deleteTopic(${t.id},'${t.name.replace(/'/g,"\\'")}');" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);opacity:0;transition:opacity .15s;color:var(--red);cursor:pointer;font-size:18px;line-height:1;padding:2px 4px;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.6'" class="delete-topic-btn">×</span>
-      </button>`;
-    });
-  });
-  
-  el.innerHTML = html;
-}
+function renderSidebarTopics() { SidebarController.render(); }
 
 // ══════════════════════════════════════════════════════
 // HOME LIST
 // ══════════════════════════════════════════════════════
-function renderHomeList() {
-  const el = document.getElementById('home-topic-list');
-  if (!topics.length) { el.innerHTML = '<div class="empty">No topics yet. Add your first topic to get started.</div>'; return; }
-  el.innerHTML = topics.map(t => {
-    const pct = computeProgress(t);
-    return `<div class="topic-card" onclick="showTopicDetail(${t.id})">
-      <div class="tc-left">
-        <div class="topic-unit">${t.unit || ''}</div>
-        <div class="topic-name">${t.name}</div>
-      </div>
-      <div style="display:flex;align-items:center;gap:12px;flex-shrink:0;">
-        <div class="prog-bar-wrap"><div class="prog-bar-fill${pct===100?' done':''}" style="width:${pct}%"></div></div>
-        <div class="prog-pct${pct===100?' done':''}">${pct}%</div>
-      </div>
-    </div>`;
-  }).join('');
-}
+function renderHomeList() { SidebarController.renderHome(); }
 
 // ══════════════════════════════════════════════════════
 // TOPIC DETAIL RENDER
@@ -2477,7 +4591,7 @@ async function saveTopic() {
   
   if (editingTopicId) {
     console.log('Updating existing topic...');
-    const { error } = await sb.from('topics').update(payload).eq('id', editingTopicId).eq('user_id', currentUser.id);
+    const { error } = await Database.topics.update(editingTopicId, payload, currentUser.id);
     if (error) { 
       console.error('❌ Update error:', error);
       toast('Error: ' + error.message); 
@@ -2489,7 +4603,7 @@ async function saveTopic() {
     if (currentTopicId === editingTopicId) renderTopicDetail();
   } else {
     console.log('Inserting new topic...');
-    const { data, error } = await sb.from('topics').insert(payload).select().single();
+    const data = await Database.topics.create(payload);
     if (error) { 
       console.error('❌ Insert error:', error);
       toast('Error: ' + error.message); 
@@ -2513,11 +4627,11 @@ async function deleteTopic(topicId, topicName) {
   
   try {
     // Delete from Supabase
-    await sb.from('exercises').delete().eq('topic_id', topicId).eq('user_id', currentUser.id);
-    await sb.from('vocab').delete().eq('topic_id', topicId).eq('user_id', currentUser.id);
-    await sb.from('errors').delete().eq('topic_id', topicId).eq('user_id', currentUser.id);
-    await sb.from('explanations').delete().eq('topic_id', topicId).eq('user_id', currentUser.id);
-    await sb.from('topics').delete().eq('id', topicId).eq('user_id', currentUser.id);
+    await Database.exercises.deleteByTopicId(topicId, currentUser.id);
+    await Database.vocab.deleteByTopicId(topicId, currentUser.id);
+    await Database.errors.deleteByTopicId(topicId, currentUser.id);
+    await Database.explanations.deleteByTopicId(topicId, currentUser.id);
+    await Database.topics.delete(topicId, currentUser.id);
     
     // Remove from local state
     const idx = topics.findIndex(t => t.id === topicId);
@@ -2547,7 +4661,7 @@ async function addVocab() {
   const t = getTopic(currentTopicId);
   if (!t) return;
   if (t.vocab.find(v => v.pt === pt)) { toast('Word already exists'); return; }
-  const { data, error } = await sb.from('vocab').insert({ topic_id: currentTopicId, user_id: currentUser.id, pt, en }).select().single();
+  const data = await Database.vocab.create({topic_id: currentTopicId, user_id: currentUser.id, pt, en});
   if (error) { toast('Error: ' + error.message); return; }
   t.vocab.push(data);
   document.getElementById('vadd-pt').value = '';
@@ -2557,25 +4671,14 @@ async function addVocab() {
 }
 
 async function removeVocab(id) {
-  await sb.from('vocab').delete().eq('id', id);
+  await Database.vocab.delete(id);
   const t = getTopic(currentTopicId);
   if (t) t.vocab = t.vocab.filter(v => v.id !== id);
   renderVocab();
   renderTopicDetail();
 }
 
-function renderVocab() {
-  const t = getTopic(currentTopicId);
-  const el = document.getElementById('vocab-list');
-  if (!t || !t.vocab.length) { el.innerHTML = '<div class="empty">No vocabulary yet.</div>'; return; }
-  el.innerHTML = t.vocab.map(v => `
-    <div class="vocab-row">
-      <span class="vocab-pt">${v.pt}</span>
-      <span class="vocab-ru">${v.en||v.ru||'—'}</span>
-      <span class="vocab-when">${v.added_at||''}</span>
-      <button class="btn btn-ghost btn-sm" style="font-size:10px;padding:2px 8px;" onclick="removeVocab(${v.id})">×</button>
-    </div>`).join('');
-}
+function renderVocab() { TopicDetailController.renderVocabList(currentTopic()); }
 
 // ══════════════════════════════════════════════════════
 // GLOBAL VOCABULARY
@@ -2604,7 +4707,7 @@ async function addGlobalVocab() {
     return;
   }
   
-  const { data, error } = await sb.from('vocab').insert(payload).select().single();
+  const data = await Database.vocab.create(payload);
   if (error) { 
     if (error.code === '23505') { // unique constraint violation
       toast('Word already exists');
@@ -2628,7 +4731,7 @@ async function addGlobalVocab() {
 async function removeGlobalVocab(id, topicId) {
   if (!confirm('Delete this word?')) return;
   
-  await sb.from('vocab').delete().eq('id', id);
+  await Database.vocab.delete(id);
   
   // Remove from local state
   if (topicId) {
@@ -2712,7 +4815,7 @@ function renderGlobalVocabulary() {
 async function toggleErrorFixed(id, currentFixed) {
   // If marking as fixed, delete from database
   if (!currentFixed) {
-    const { error } = await sb.from('errors').delete().eq('id', id);
+    await Database.errors.delete(id);
     if (error) { 
       console.error('Error deleting error:', error);
       toast('Error: ' + error.message); 
@@ -2728,7 +4831,7 @@ async function toggleErrorFixed(id, currentFixed) {
     toast('Error removed');
   } else {
     // If unmarking as fixed (shouldn't happen with delete approach, but keep for safety)
-    const { error } = await sb.from('errors').update({ fixed: false }).eq('id', id);
+    await Database.errors.update(id, {fixed: false});
     if (error) { 
       toast('Error: ' + error.message); 
       return; 
@@ -2745,52 +4848,7 @@ async function toggleErrorFixed(id, currentFixed) {
   renderTopicDetail();
 }
 
-function renderErrors() {
-  const t = getTopic(currentTopicId);
-  const el = document.getElementById('errors-list');
-  if (!t || !t.errors.length) { el.innerHTML = '<div class="empty">No errors recorded yet. Keep practicing!</div>'; return; }
-
-  // Group by grammar_category
-  const groups = {};
-  t.errors.forEach(e => {
-    const cat = e.grammar_category || e.exercise_meta || 'General';
-    if (!groups[cat]) groups[cat] = [];
-    groups[cat].push(e);
-  });
-
-  // Open errors first, then fixed
-  const sortGroup = arr => [...arr.filter(e=>!e.fixed), ...arr.filter(e=>e.fixed)];
-
-  let html = '';
-  Object.entries(groups).forEach(([cat, errs]) => {
-    const openCount = errs.filter(e=>!e.fixed).length;
-    html += `<div style="margin-bottom:1.5rem;">
-      <div style="font-family:'Geist Mono',monospace;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink3);padding:.5rem 0;border-bottom:1px solid var(--line);margin-bottom:.5rem;display:flex;justify-content:space-between;">
-        <span>${cat}</span>
-        ${openCount ? `<span style="color:var(--red)">${openCount} open</span>` : '<span style="color:var(--green)">all fixed</span>'}
-      </div>`;
-    html += sortGroup(errs).map(e => `
-      <div class="error-row">
-        <div class="check-box${e.fixed?' done':''}" data-error-id="${e.id}" data-fixed="${e.fixed}"></div>
-        <div>
-          <div class="error-text${e.fixed?' done':''}">${e.text}</div>
-          ${e.explanation ? `<div class="error-explanation">${e.explanation}</div>` : ''}
-          <div class="error-meta">${e.created_at?.slice(0,10)||''}</div>
-        </div>
-      </div>`).join('');
-    html += '</div>';
-  });
-  el.innerHTML = html;
-  
-  // Setup event delegation for checkboxes
-  el.onclick = (e) => {
-    const checkBox = e.target.closest('.check-box');
-    if (!checkBox) return;
-    const errorId = parseInt(checkBox.dataset.errorId);
-    const isFixed = checkBox.dataset.fixed === 'true';
-    toggleErrorFixed(errorId, isFixed);
-  };
-}
+function renderErrors() { TopicDetailController.renderErrorsList(currentTopic()); }
 
 // ══════════════════════════════════════════════════════
 // TOPIC PROMPT
@@ -2802,7 +4860,7 @@ function loadTopicPrompt() {
 
 async function saveTopicPrompt() {
   const val = document.getElementById('topic-prompt-input').value;
-  await sb.from('topics').update({ custom_prompt: val }).eq('id', currentTopicId).eq('user_id', currentUser.id);
+  await Database.topics.update(currentTopicId, {custom_prompt: val}, currentUser.id);
   const t = getTopic(currentTopicId);
   if (t) t.custom_prompt = val;
   toast('Prompt saved');
@@ -2894,52 +4952,7 @@ async function removeUserApiKey() {
 // ADMIN PANEL FUNCTIONS
 // ══════════════════════════════════════════════════════
 
-async function loadAdminPanel() {
-  // Load global API key
-  const { data: settings } = await sb
-    .from('system_settings')
-    .select('*');
-  
-  settings?.forEach(s => {
-    if (s.setting_key === 'global_api_key') {
-      const input = document.getElementById('admin-global-key');
-      if (input) {
-        const key = s.setting_value || '';
-        input.value = key ? '••••••••' + key.slice(-4) : '';
-      }
-      
-      const status = document.getElementById('global-key-status');
-      if (status) {
-        if (s.setting_value) {
-          status.textContent = 'Set ✓';
-          status.className = 'key-status set';
-        } else {
-          status.textContent = 'Not set';
-          status.className = 'key-status unset';
-        }
-      }
-    }
-  });
-  
-  // Load all prompts
-  const promptTypes = ['default', 'overview', 'grading', 'validator', 'exam_grading'];
-  for (const type of promptTypes) {
-    const promptData = systemPrompts[type === 'overview' ? 'topic_overview' : type];
-    if (promptData) {
-      const textareaId = `admin-prompt-${type}`;
-      const modelId = `admin-prompt-${type}-model`;
-      const tempId = `admin-prompt-${type}-temp`;
-      
-      const textarea = document.getElementById(textareaId);
-      const modelSelect = document.getElementById(modelId);
-      const tempInput = document.getElementById(tempId);
-      
-      if (textarea) textarea.value = promptData.content;
-      if (modelSelect) modelSelect.value = promptData.model;
-      if (tempInput) tempInput.value = promptData.temperature;
-    }
-  }
-}
+async function loadAdminPanel() { await AdminViewController.loadPanel(); }
 
 async function saveGlobalApiKey() {
   const val = document.getElementById('admin-global-key').value.trim();
@@ -3048,82 +5061,7 @@ let currentEditingPromptId = null;
 /**
  * Render topic prompts list in admin panel
  */
-async function renderTopicPromptsAdmin() {
-  const container = document.getElementById('topic-prompts-list');
-  const searchInput = document.getElementById('topic-prompt-search');
-  const filterSelect = document.getElementById('topic-prompt-filter');
-  
-  if (!container) return;
-  
-  container.innerHTML = '<div style="color:var(--ink3);text-align:center;padding:2rem;">Loading prompts...</div>';
-  
-  try {
-    const { data, error } = await sb
-      .from('topic_prompts')
-      .select('*')
-      .order('category', { ascending: true })
-      .order('prompt_name', { ascending: true });
-    
-    if (error) throw error;
-    
-    if (!data || data.length === 0) {
-      container.innerHTML = '<div style="color:var(--ink3);text-align:center;padding:2rem;">No topic prompts found. Click "+ Add Prompt" to create one.</div>';
-      return;
-    }
-    
-    // Apply filters
-    let filtered = data;
-    
-    // Category filter
-    const categoryFilter = filterSelect?.value || '';
-    if (categoryFilter) {
-      filtered = filtered.filter(p => p.category === categoryFilter);
-    }
-    
-    // Search filter
-    const searchTerm = searchInput?.value.toLowerCase() || '';
-    if (searchTerm) {
-      filtered = filtered.filter(p => 
-        p.prompt_name.toLowerCase().includes(searchTerm) ||
-        p.description?.toLowerCase().includes(searchTerm) ||
-        p.prompt_content.toLowerCase().includes(searchTerm)
-      );
-    }
-    
-    if (filtered.length === 0) {
-      container.innerHTML = '<div style="color:var(--ink3);text-align:center;padding:2rem;">No prompts match your filters.</div>';
-      return;
-    }
-    
-    // Render cards
-    container.innerHTML = filtered.map(prompt => `
-      <div class="topic-prompt-card">
-        <div class="topic-prompt-card-header">
-          <div>
-            <div class="topic-prompt-card-title">
-              ${escapeHtml(prompt.prompt_name)}
-              ${prompt.is_default ? '<span class="badge-default">DEFAULT</span>' : ''}
-            </div>
-            <div class="topic-prompt-card-meta">
-              <span class="topic-prompt-card-category">${getCategoryLabel(prompt.category)}</span>
-              ${prompt.description ? `<span>${escapeHtml(prompt.description)}</span>` : ''}
-            </div>
-          </div>
-        </div>
-        <div class="topic-prompt-card-content">${escapeHtml(prompt.prompt_content)}</div>
-        <div class="topic-prompt-card-actions">
-          <button class="btn secondary" onclick="editTopicPrompt(${prompt.id})">Edit</button>
-          <button class="btn secondary" onclick="duplicateTopicPrompt(${prompt.id})" title="Duplicate this prompt">Duplicate</button>
-          <button class="btn secondary" style="color:var(--red);" onclick="deleteTopicPrompt(${prompt.id}, '${escapeHtml(prompt.prompt_name).replace(/'/g, "\\'")}')">Delete</button>
-        </div>
-      </div>
-    `).join('');
-    
-  } catch (err) {
-    console.error('Error loading topic prompts:', err);
-    container.innerHTML = '<div style="color:var(--red);text-align:center;padding:2rem;">Error loading prompts. Check console.</div>';
-  }
-}
+async function renderTopicPromptsAdmin() { await AdminViewController.renderTopicPrompts(); }
 
 /**
  * Get category label for display
@@ -3329,55 +5267,7 @@ let currentEditingExamPromptId = null;
 /**
  * Render exam prompts list in admin panel
  */
-async function renderExamPromptsAdmin() {
-  const container = document.getElementById('exam-prompts-list');
-  
-  if (!container) return;
-  
-  container.innerHTML = '<div style="color:var(--ink3);text-align:center;padding:2rem;">Loading exam prompts...</div>';
-  
-  try {
-    const { data, error } = await sb
-      .from('exam_prompts')
-      .select('*')
-      .order('unit_key', { ascending: true });
-    
-    if (error) throw error;
-    
-    if (!data || data.length === 0) {
-      container.innerHTML = '<div style="color:var(--ink3);text-align:center;padding:2rem;">No exam prompts found. Click "+ Add Exam Prompt" to create one.</div>';
-      return;
-    }
-    
-    // Render cards
-    container.innerHTML = data.map(prompt => `
-      <div class="exam-prompt-card">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:0.75rem;">
-          <div>
-            <div style="font-family:'EB Garamond',serif;font-size:18px;font-weight:500;color:var(--ink1);">
-              ${escapeHtml(prompt.unit_name)}
-              ${prompt.is_active ? '<span style="display:inline-block;padding:2px 6px;background:var(--green);color:white;border-radius:3px;font-size:10px;margin-left:8px;">ACTIVE</span>' : ''}
-            </div>
-            <div style="font-size:12px;color:var(--ink3);margin-top:0.25rem;">
-              ${prompt.description || 'No description'}
-            </div>
-          </div>
-        </div>
-        <div style="font-size:14px;color:var(--ink2);line-height:1.6;margin-bottom:0.75rem;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;">
-          ${escapeHtml(prompt.prompt_content)}
-        </div>
-        <div style="display:flex;gap:8px;margin-top:0.75rem;">
-          <button class="btn secondary" onclick="editExamPrompt(${prompt.id})">Edit</button>
-          <button class="btn secondary" style="color:var(--red);" onclick="deleteExamPrompt(${prompt.id}, '${escapeHtml(prompt.unit_name).replace(/'/g, "\\'")}')">Delete</button>
-        </div>
-      </div>
-    `).join('');
-    
-  } catch (err) {
-    console.error('Error loading exam prompts:', err);
-    container.innerHTML = '<div style="color:var(--red);text-align:center;padding:2rem;">Error loading exam prompts. Check console.</div>';
-  }
-}
+async function renderExamPromptsAdmin() { await AdminViewController.renderExamPrompts(); }
 
 /**
  * Open modal to add new exam prompt
@@ -3723,75 +5613,7 @@ ${JSON.stringify(normalizedAnswers, null, 2)}`;
 /**
  * Render topic explanation HTML from structured data
  */
-function renderTopicExplanation(explainData) {
-  let html = `<div data-explanation style="border:1px solid var(--line);padding:1.25rem 1.5rem;background:var(--white);margin-bottom:1.25rem;">
-    <div style="font-family:'Geist Mono',monospace;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink3);margin-bottom:.75rem;">Topic overview</div>
-    <div style="font-size:15px;color:var(--ink2);line-height:1.75;margin-bottom:1rem;">${explainData.summary}</div>`;
-  
-  // Key rules
-  if (explainData.key_rules && explainData.key_rules.length > 0) {
-    html += `<div style="margin-bottom:1rem;">
-      <div style="font-family:'Geist Mono',monospace;font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink3);margin-bottom:.5rem;">Key Rules</div>`;
-    explainData.key_rules.forEach(rule => {
-      html += `<div style="font-size:14px;color:var(--ink2);margin-bottom:.3rem;">• ${rule}</div>`;
-    });
-    html += `</div>`;
-  }
-  
-  // Examples
-  if (explainData.examples && explainData.examples.length > 0) {
-    html += `<div style="margin-bottom:1rem;">
-      <div style="font-family:'Geist Mono',monospace;font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink3);margin-bottom:.5rem;">Examples</div>`;
-    explainData.examples.forEach(ex => {
-      html += `<div style="font-size:14px;margin-bottom:.4rem;">
-        <span style="color:var(--ink);font-weight:500;">${ex.pt}</span>
-        <span style="color:var(--ink3);margin-left:.5rem;">→ ${ex.en}</span>
-      </div>`;
-    });
-    html += `</div>`;
-  }
-  
-  // Artifacts (grammar components)
-  if (explainData.artifacts && Object.keys(explainData.artifacts).length > 0) {
-    html += `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:.75rem;margin-top:1rem;">`;
-    
-    for (const [category, items] of Object.entries(explainData.artifacts)) {
-      if (!items || items.length === 0) continue;
-      
-      const categoryTitle = category.charAt(0).toUpperCase() + category.slice(1);
-      
-      // Special rendering for VERBS with conjugation tables
-      if (category === 'verbs' && items[0]?.conjugations) {
-        items.forEach(verb => {
-          html += `<div style="background:var(--bg);padding:.75rem;border-radius:4px;border:1px solid var(--line);">
-            <div style="font-family:'Geist Mono',monospace;font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink3);margin-bottom:.5rem;">${verb.infinitive} — ${verb.translation}</div>
-            <div style="font-size:10px;color:var(--ink3);margin-bottom:.4rem;font-style:italic;">${verb.tense || 'Present'}</div>
-            <table style="width:100%;font-size:13px;">`;
-          verb.conjugations.forEach(c => {
-            html += `<tr>
-              <td style="color:var(--ink3);padding:2px 6px 2px 0;width:45%;">${c.pronoun}</td>
-              <td style="color:var(--ink);font-weight:500;padding:2px 0;">${c.form}</td>
-            </tr>`;
-          });
-          html += `</table></div>`;
-        });
-      } else {
-        // Standard rendering for other categories
-        html += `<div style="background:var(--bg);padding:.75rem;border-radius:4px;border:1px solid var(--line);">
-          <div style="font-family:'Geist Mono',monospace;font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink3);margin-bottom:.5rem;">${categoryTitle}</div>`;
-        items.forEach(item => {
-          const displayText = typeof item === 'string' ? item : `${item.pt || item.infinitive} (${item.en || item.translation})`;
-          html += `<div style="font-size:13px;color:var(--ink2);margin-bottom:.2rem;">${displayText}</div>`;
-        });
-        html += `</div>`;
-      }
-    }
-    html += `</div>`;
-  }
-  
-  html += `</div>`;
-  return html;
-}
+function renderTopicExplanation(explainData) { TopicDetailController.renderOverview(explainData); }
 
 // ══════════════════════════════════════════════════════
 // EXERCISE VALIDATION & GENERATION
@@ -3843,7 +5665,7 @@ async function validateExercises(exerciseJSON, apiKey) {
     const model = validatorPromptData?.model || 'gpt-5.4-mini';
     const temperature = validatorPromptData?.temperature || 0;
     
-    const validation = await callOpenAI(apiKey, buildValidatorPrompt(exerciseJSON), {
+    const validation = await OpenAI.call(apiKey, buildValidatorPrompt(exerciseJSON), {
       model: model,
       temperature: temperature,
       schema: VALIDATOR_SCHEMA,
@@ -3877,7 +5699,7 @@ async function generateTopicOverview() {
   status.classList.add('loading');
   
   try {
-    const explainData = await callOpenAI(apiKey, buildTopicOverviewPrompt(topic), {
+    const explainData = await OpenAI.call(apiKey, buildTopicOverviewPrompt(topic), {
       model: model,
       temperature: temperature,
       schema: TOPIC_OVERVIEW_SCHEMA,
@@ -3885,7 +5707,7 @@ async function generateTopicOverview() {
     });
     
     // Save to cache
-    await sb.from('explanations').upsert({
+    await Database.explanations.upsert({
       topic_id: currentTopicId,
       user_id: currentUser.id,
       text: JSON.stringify(explainData),
@@ -3915,7 +5737,7 @@ async function explainThenGenerate() {
   const status = document.getElementById('gen-status');
   
   // Check cache first
-  const { data: cached, error: cacheError } = await sb.from('explanations').select('*').eq('topic_id', currentTopicId).eq('user_id', currentUser.id).maybeSingle();
+  const { data: cached, error: cacheError } = await Database.explanations.getByTopicId(currentTopicId, currentUser.id);
   
   if (cacheError) {
     console.error('❌ Error loading cached explanation:', cacheError);
@@ -3939,7 +5761,7 @@ async function explainThenGenerate() {
     status.classList.add('loading');
 
     try {
-      const explainData = await callOpenAI(apiKey, buildTopicOverviewPrompt(topic), {
+      const explainData = await OpenAI.call(apiKey, buildTopicOverviewPrompt(topic), {
         model: 'gpt-5.4-mini',
         temperature: 0.2,
         schema: TOPIC_OVERVIEW_SCHEMA,
@@ -3947,7 +5769,7 @@ async function explainThenGenerate() {
       });
       
       // Save to cache
-      await sb.from('explanations').upsert({
+      await Database.explanations.upsert({
         topic_id: currentTopicId,
         user_id: currentUser.id,
         text: JSON.stringify(explainData)
@@ -3993,7 +5815,7 @@ async function generateExercise() {
 
   try {
     // Generate exercises
-    let exerciseData = await callOpenAI(apiKey, buildPrompt(topic), {
+    let exerciseData = await OpenAI.call(apiKey, buildPrompt(topic), {
       model: model,
       temperature: temperature,
       schema: EXERCISE_SCHEMA,
@@ -4034,7 +5856,7 @@ async function generateExercise() {
       console.log('📝 Full exercise data:', JSON.stringify(exerciseData, null, 2));
       status.textContent = 'Regenerating (quality check failed)';
       
-      exerciseData = await callOpenAI(apiKey, buildPrompt(topic), {
+      exerciseData = await OpenAI.call(apiKey, buildPrompt(topic), {
         model: 'gpt-5.4-mini',
         temperature: 0.35,
         schema: EXERCISE_SCHEMA,
@@ -4064,7 +5886,7 @@ async function generateExercise() {
       console.warn('Validation failed, regenerating:', validation.issues);
       status.textContent = 'Regenerating';
       
-      exerciseData = await callOpenAI(apiKey, buildPrompt(topic), {
+      exerciseData = await OpenAI.call(apiKey, buildPrompt(topic), {
         model: 'gpt-5.4-mini',
         temperature: 0.35,
         schema: EXERCISE_SCHEMA,
@@ -4208,7 +6030,7 @@ async function submitExercise() {
     const model = gradingPromptData?.model || 'gpt-5.4-mini';
     const temperature = gradingPromptData?.temperature || 0;
     
-    const grading = await callOpenAI(apiKey, buildGradingPrompt(normalizedAnswers), {
+    const grading = await OpenAI.call(apiKey, buildGradingPrompt(normalizedAnswers), {
       model: model,
       temperature: temperature,
       schema: GRADING_SCHEMA,
@@ -4297,7 +6119,7 @@ async function processGrading(results, answers) {
 
   // Save to Supabase (wrapped in try-catch to ensure UI updates always happen)
   try {
-    const { data: exData, error: exError } = await sb.from('exercises').insert({ topic_id: currentTopicId, user_id: currentUser.id, error_count: errorCount }).select().single();
+    const exData = await Database.exercises.create(currentTopicId, errorCount, currentUser.id);
     
     if (exError) {
       console.error('Error saving exercise:', exError);
@@ -4306,7 +6128,7 @@ async function processGrading(results, answers) {
     }
 
     if (newErrors.length) {
-      const { data: errData, error: errError } = await sb.from('errors').insert(newErrors).select();
+      const errData = await Database.errors.createMany(newErrors);
       
       if (errError) {
         console.error('Error saving errors:', errError);
@@ -4316,7 +6138,7 @@ async function processGrading(results, answers) {
     }
     
     if (newVocab.length) {
-      const { data: vocData, error: vocError } = await sb.from('vocab').upsert(newVocab, { onConflict: 'topic_id,pt', ignoreDuplicates: true }).select();
+      const vocData = await Database.vocab.upsertMany(newVocab);
       
       if (vocError) {
         console.error('Error saving vocab:', vocError);
@@ -4638,7 +6460,7 @@ async function generateFinalExam(unitNumber, unitTopics) {
 
   try {
     // Call OpenAI with correct argument order: (apiKey, prompt, options)
-    const response = await callOpenAI(apiKey, prompt, {
+    const response = await OpenAI.call(apiKey, prompt, {
       model: 'gpt-4o-mini',
       temperature: 0.4,
       schema: EXERCISE_SCHEMA,
@@ -4692,23 +6514,7 @@ let currentExamAnswers = {};
 /**
  * Show final exam taking interface
  */
-function showFinalExamTaking(exam) {
-  currentExam = exam;
-  currentExamAnswers = {};
-  
-  showView('final-exam');
-  
-  // Set metadata
-  const attemptNum = exam.attempts + 1;
-  document.getElementById('exam-unit-name').textContent = `${exam.unit_name} — Final Exam`;
-  document.getElementById('exam-meta').textContent = `${exam.questions.length} questions · Attempt #${attemptNum}`;
-  
-  // Reset progress
-  updateExamProgress();
-  
-  // Render all questions
-  renderExamQuestions(exam.questions);
-}
+function showFinalExamTaking(exam) { ExamViewController.renderTaking(exam); }
 
 /**
  * Render all exam questions
@@ -4994,7 +6800,7 @@ Return ONLY valid JSON:
       additionalProperties: false
     };
     
-    const response = await callOpenAI(apiKey, prompt, {
+    const response = await OpenAI.call(apiKey, prompt, {
       model: model,
       temperature: temperature,
       schema: gradingSchema,
