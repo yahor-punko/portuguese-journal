@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Português — Learning Journal</title>
-<!-- VERSION: v10.3.1 | Build: 2026-03-26 | LEGACY CODE REMOVED: Old functions replaced with controllers -->
+<!-- VERSION: v10.0.1 | Build: 2026-04-03 | FIX: Added getAll() methods to Database modules -->
 <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;1,400&family=Geist+Mono:wght@300;400;500&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <style>
@@ -1006,10 +1006,10 @@ main{padding:2.5rem 3rem;max-width:760px;}
 // ══════════════════════════════════════════════════════
 // VERSION INFO
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v10.3.1';
-const BUILD_DATE = '2026-03-26';
+const APP_VERSION = 'v10.0.1';
+const BUILD_DATE = '2026-04-03';
 console.log(`%c🇵🇹 Portuguese Learning Journal ${APP_VERSION}`, 'font-weight: bold; font-size: 14px; color: #2a6b3f;');
-console.log(`Build: ${BUILD_DATE} | REFACTORED: Modular architecture`);
+console.log(`Build: ${BUILD_DATE} | FIX: Added Database.*.getAll() methods`);
 
 // ══════════════════════════════════════════════════════
 // CONFIGURATION & CONSTANTS
@@ -1537,6 +1537,13 @@ const Database = (() => {
   
   // Exercises operations
   const exercises = {
+    async getAll() {
+      return query('exercises', q => 
+        q.select('*').order('created_at', { ascending: false }),
+        { op: 'getAll exercises' }
+      );
+    },
+    
     async create(topicId, errorCount) {
       return query('exercises', q => 
         q.insert({ topic_id: topicId, error_count: errorCount }).select().single(),
@@ -1554,6 +1561,13 @@ const Database = (() => {
   
   // Vocabulary operations
   const vocab = {
+    async getAll() {
+      return query('vocab', q => 
+        q.select('*').order('created_at', { ascending: false }),
+        { op: 'getAll vocab' }
+      );
+    },
+    
     async create(topicId, pt, en) {
       return query('vocab', q => 
         q.insert({ topic_id: topicId, pt, en }).select().single(),
@@ -1578,6 +1592,13 @@ const Database = (() => {
   
   // Errors operations
   const errors = {
+    async getAll() {
+      return query('errors', q => 
+        q.select('*').order('created_at', { ascending: false }),
+        { op: 'getAll errors' }
+      );
+    },
+    
     async create(topicId, text, explanation, grammarCategory) {
       return query('errors', q => 
         q.insert({
@@ -3240,390 +3261,6 @@ const AdminPanel = (() => {
 })();
 
 // ══════════════════════════════════════════════════════
-
-// ══════════════════════════════════════════════════════
-// UI CONTROLLERS
-// ══════════════════════════════════════════════════════
-
-// ────────────────────────────────────────────────────────
-// Sidebar Controller
-// ────────────────────────────────────────────────────────
-const SidebarController = (() => {
-  function render() {
-    const el = document.getElementById('sidebar-topics');
-    if (topics.length === 0) { el.innerHTML = ''; return; }
-    
-    const grouped = {};
-    topics.forEach(t => {
-      const unitKey = t.unit || 'Other';
-      if (!grouped[unitKey]) grouped[unitKey] = [];
-      grouped[unitKey].push(t);
-    });
-    
-    const sortedUnits = Object.keys(grouped).sort((a, b) => {
-      if (a === 'Other') return 1;
-      if (b === 'Other') return -1;
-      const aNum = parseInt(a.match(/\d+/)?.[0] || '999');
-      const bNum = parseInt(b.match(/\d+/)?.[0] || '999');
-      return aNum - bNum;
-    });
-    
-    let html = '';
-    sortedUnits.forEach(unitKey => {
-      const unitTopics = grouped[unitKey];
-      const unitMatch = unitKey.match(/Unidade (\d+)/);
-      let examBadge = '';
-      
-      if (unitMatch) {
-        const unitNumber = parseInt(unitMatch[1]);
-        const readiness = isUnitReadyForExam(unitNumber);
-        const exam = getFinalExam(`unit${unitNumber}`);
-        
-        if (readiness.ready) {
-          if (exam && exam.best_score >= 80) {
-            examBadge = ` <span class="final-exam-badge passed" onclick="event.stopPropagation();startFinalExam(${unitNumber})" title="Final Exam: ${exam.best_score}%">🎓</span>`;
-          } else if (exam) {
-            examBadge = ` <span class="final-exam-badge available" onclick="event.stopPropagation();startFinalExam(${unitNumber})" title="Final Exam Available (${exam.attempts} attempts)">🎓</span>`;
-          } else {
-            examBadge = ` <span class="final-exam-badge ready" onclick="event.stopPropagation();startFinalExam(${unitNumber})" title="Final Exam Available">🎓</span>`;
-          }
-        }
-      }
-      
-      html += `<div class="sidebar-unit-header">${unitKey}${examBadge}</div>`;
-      unitTopics.forEach(t => {
-        const pct = computeProgress(t);
-        const active = t.id === currentTopicId ? ' active' : '';
-        const pillClass = pct === 100 ? ' done' : '';
-        html += `<button class="nav-btn${active}" onclick="showTopicDetail(${t.id})" style="position:relative;padding-right:32px;">
-          <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left">${t.name}</span>
-          <span class="progress-pill${pillClass}">${pct}%</span>
-          <span onclick="event.stopPropagation();deleteTopic(${t.id},'${t.name.replace(/'/g,"\\'")}');" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);opacity:0;transition:opacity .15s;color:var(--red);cursor:pointer;font-size:18px;line-height:1;padding:2px 4px;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.6'" class="delete-topic-btn">×</span>
-        </button>`;
-      });
-    });
-    
-    el.innerHTML = html;
-  }
-  
-  function renderHome() {
-    const el = document.getElementById('home-topic-list');
-    if (!topics.length) { 
-      el.innerHTML = '<div class="empty">No topics yet. Add your first topic to get started.</div>'; 
-      return; 
-    }
-    
-    el.innerHTML = topics.map(t => {
-      const pct = computeProgress(t);
-      return `<div class="topic-card" onclick="showTopicDetail(${t.id})">
-        <div class="tc-left">
-          <div class="topic-unit">${t.unit || ''}</div>
-          <div class="topic-name">${t.name}</div>
-        </div>
-        <div style="display:flex;align-items:center;gap:12px;flex-shrink:0;">
-          <div class="prog-bar-wrap"><div class="prog-bar-fill${pct===100?' done':''}" style="width:${pct}%"></div></div>
-          <div class="prog-pct${pct===100?' done':''}">${pct}%</div>
-        </div>
-      </div>`;
-    }).join('');
-  }
-  
-  return { render, renderHome };
-})();
-
-// ────────────────────────────────────────────────────────
-// Topic Detail Controller
-// ────────────────────────────────────────────────────────
-const TopicDetailController = (() => {
-  function renderVocabList(topic) {
-    const el = document.getElementById('vocab-list');
-    if (!topic.vocab || !topic.vocab.length) {
-      el.innerHTML = '<div class="empty">No vocabulary yet. Complete exercises to add words.</div>';
-      return;
-    }
-    
-    el.innerHTML = topic.vocab.map(v => `
-      <div class="vocab-item">
-        <div class="vocab-pt">${v.pt}</div>
-        <div class="vocab-en">${v.en}</div>
-        <button class="vocab-del" onclick="deleteVocabWord(${v.id})" title="Delete">×</button>
-      </div>
-    `).join('');
-  }
-  
-  function renderErrorsList(topic) {
-    const el = document.getElementById('errors-list');
-    const unfixed = (topic.errors || []).filter(e => !e.fixed);
-    
-    if (!unfixed.length) {
-      el.innerHTML = '<div class="empty">✓ No active errors. Great work!</div>';
-      return;
-    }
-    
-    el.innerHTML = unfixed.map(e => {
-      const explanationHTML = e.explanation ? 
-        `<div class="err-explain">${e.explanation}</div>` : '';
-      
-      return `
-        <div class="error-card">
-          <div class="err-row">
-            <div class="err-label">Question:</div>
-            <div class="err-val">${e.question}</div>
-          </div>
-          <div class="err-row">
-            <div class="err-label">Your answer:</div>
-            <div class="err-val err-wrong">${e.user_answer}</div>
-          </div>
-          <div class="err-row">
-            <div class="err-label">Correct:</div>
-            <div class="err-val err-right">${e.correct_answer}</div>
-          </div>
-          ${explanationHTML}
-          <div class="err-actions">
-            <button class="err-btn fix" onclick="deleteError(${e.id})">Mark as Fixed</button>
-            <button class="err-btn unfix" onclick="unfixError(${e.id})">Review Again Later</button>
-          </div>
-        </div>
-      `;
-    }).join('');
-  }
-  
-  function renderOverview(explainData) {
-    const el = document.getElementById('overview-content');
-    
-    let html = '<div class="overview-body">';
-    
-    if (explainData.grammar_rules && explainData.grammar_rules.length) {
-      html += '<h3>Grammar Rules</h3><ul class="rules-list">';
-      explainData.grammar_rules.forEach(rule => {
-        html += `<li><strong>${rule.rule}:</strong> ${rule.explanation}`;
-        if (rule.examples && rule.examples.length) {
-          html += '<ul class="examples-list">';
-          rule.examples.forEach(ex => {
-            html += `<li><span class="ex-pt">${ex.portuguese}</span> → <span class="ex-en">${ex.english}</span></li>`;
-          });
-          html += '</ul>';
-        }
-        html += '</li>';
-      });
-      html += '</ul>';
-    }
-    
-    if (explainData.verb_conjugations && explainData.verb_conjugations.length) {
-      html += '<h3>Verb Conjugations</h3>';
-      explainData.verb_conjugations.forEach(verb => {
-        html += `<div class="verb-block"><h4>${verb.verb} (${verb.tense})</h4><table class="conj-table">`;
-        verb.conjugations.forEach(c => {
-          html += `<tr><td class="conj-pronoun">${c.pronoun}</td><td class="conj-form">${c.form}</td></tr>`;
-        });
-        html += '</table></div>';
-      });
-    }
-    
-    if (explainData.common_phrases && explainData.common_phrases.length) {
-      html += '<h3>Common Phrases</h3><ul class="phrases-list">';
-      explainData.common_phrases.forEach(phrase => {
-        html += `<li><span class="phrase-pt">${phrase.portuguese}</span> → <span class="phrase-en">${phrase.english}</span></li>`;
-      });
-      html += '</ul>';
-    }
-    
-    html += '</div>';
-    el.innerHTML = html;
-  }
-  
-  return { renderVocabList, renderErrorsList, renderOverview };
-})();
-
-// ────────────────────────────────────────────────────────
-// Admin View Controller
-// ────────────────────────────────────────────────────────
-const AdminViewController = (() => {
-  async function loadPanel() {
-    const { data: settings } = await sb.from('system_settings').select('*');
-    
-    settings?.forEach(s => {
-      if (s.setting_key === 'global_api_key') {
-        const input = document.getElementById('admin-global-key');
-        if (input) {
-          const key = s.setting_value || '';
-          input.value = key ? '••••••••' + key.slice(-4) : '';
-        }
-        
-        const status = document.getElementById('global-key-status');
-        if (status) {
-          if (s.setting_value) {
-            status.textContent = 'Set ✓';
-            status.className = 'key-status set';
-          } else {
-            status.textContent = 'Not set';
-            status.className = 'key-status unset';
-          }
-        }
-      }
-    });
-    
-    const promptTypes = ['default', 'overview', 'grading', 'validator', 'exam_grading'];
-    for (const type of promptTypes) {
-      const promptData = systemPrompts[type === 'overview' ? 'topic_overview' : type];
-      if (promptData) {
-        const textareaId = `admin-prompt-${type}`;
-        const modelId = `admin-prompt-${type}-model`;
-        const tempId = `admin-prompt-${type}-temp`;
-        
-        const textarea = document.getElementById(textareaId);
-        const modelSelect = document.getElementById(modelId);
-        const tempInput = document.getElementById(tempId);
-        
-        if (textarea) textarea.value = promptData.content;
-        if (modelSelect) modelSelect.value = promptData.model;
-        if (tempInput) tempInput.value = promptData.temperature;
-      }
-    }
-  }
-  
-  async function renderTopicPrompts() {
-    const { data: prompts, error } = await sb
-      .from('topic_prompts')
-      .select('*')
-      .order('category', { ascending: true })
-      .order('name', { ascending: true });
-    
-    if (error) {
-      console.error('Error loading topic prompts:', error);
-      return;
-    }
-    
-    const tbody = document.getElementById('topic-prompts-tbody');
-    if (!tbody) return;
-    
-    if (!prompts || prompts.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:2rem;color:var(--ink3);">No topic prompts yet. Create one above.</td></tr>';
-      return;
-    }
-    
-    tbody.innerHTML = prompts.map(p => `
-      <tr>
-        <td>${p.category || 'General'}</td>
-        <td><strong>${p.name}</strong></td>
-        <td style="max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${p.content.substring(0, 100)}...</td>
-        <td>
-          <button class="admin-btn-sm" onclick="editTopicPrompt(${p.id})">Edit</button>
-          <button class="admin-btn-sm danger" onclick="deleteTopicPrompt(${p.id}, '${p.name.replace(/'/g, "\'")}')">Delete</button>
-        </td>
-      </tr>
-    `).join('');
-  }
-  
-  async function renderExamPrompts() {
-    const { data: prompts, error } = await sb
-      .from('exam_prompts')
-      .select('*')
-      .order('exam_key', { ascending: true });
-    
-    if (error) {
-      console.error('Error loading exam prompts:', error);
-      return;
-    }
-    
-    const tbody = document.getElementById('exam-prompts-tbody');
-    if (!tbody) return;
-    
-    if (!prompts || prompts.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:2rem;color:var(--ink3);">No exam prompts yet. Create one above.</td></tr>';
-      return;
-    }
-    
-    tbody.innerHTML = prompts.map(p => `
-      <tr>
-        <td><strong>${p.exam_key}</strong></td>
-        <td style="max-width:400px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${p.content.substring(0, 150)}...</td>
-        <td>
-          <button class="admin-btn-sm" onclick="editExamPrompt(${p.id})">Edit</button>
-          <button class="admin-btn-sm danger" onclick="deleteExamPrompt(${p.id}, '${p.exam_key.replace(/'/g, "\'")}')">Delete</button>
-        </td>
-      </tr>
-    `).join('');
-  }
-  
-  return { loadPanel, renderTopicPrompts, renderExamPrompts };
-})();
-
-// ────────────────────────────────────────────────────────
-// Exam View Controller
-// ────────────────────────────────────────────────────────
-const ExamViewController = (() => {
-  function renderTaking(exam) {
-    const data = typeof exam.exam_data === 'string' ? JSON.parse(exam.exam_data) : exam.exam_data;
-    
-    document.getElementById('exam-title').textContent = `Final Exam — ${exam.exam_key.replace('unit', 'Unidade ')}`;
-    document.getElementById('exam-instructions').textContent = data.instructions || 'Complete all questions to the best of your ability.';
-    
-    const questionsContainer = document.getElementById('exam-questions');
-    questionsContainer.innerHTML = data.items.map((item, idx) => {
-      const qNum = idx + 1;
-      let inputHTML = '';
-      
-      if (item.type === 'choice' && item.options) {
-        inputHTML = item.options.map(opt => 
-          `<label class="exam-choice"><input type="radio" name="exam_q${qNum}" value="${opt}"> ${opt}</label>`
-        ).join('');
-      } else {
-        inputHTML = `<input type="text" class="exam-input" id="exam_ans_${qNum}" placeholder="Your answer...">`;
-      }
-      
-      return `
-        <div class="exam-question">
-          <div class="exam-q-num">Question ${qNum}</div>
-          <div class="exam-q-text">${item.question}</div>
-          <div class="exam-q-input">${inputHTML}</div>
-        </div>
-      `;
-    }).join('');
-  }
-  
-  function renderResults(exam, results, userAnswers) {
-    const data = typeof exam.exam_data === 'string' ? JSON.parse(exam.exam_data) : exam.exam_data;
-    
-    document.getElementById('exam-result-score').textContent = `${results.score}%`;
-    document.getElementById('exam-result-feedback').textContent = results.feedback || '';
-    
-    const passed = results.score >= 80;
-    const banner = document.getElementById('exam-result-banner');
-    banner.className = passed ? 'exam-result-banner pass' : 'exam-result-banner fail';
-    
-    const breakdown = document.getElementById('exam-result-breakdown');
-    breakdown.innerHTML = results.results.map((r, idx) => {
-      const item = data.items[idx];
-      const userAnswer = userAnswers[idx];
-      
-      return `
-        <div class="exam-result-item ${r.correct ? 'correct' : 'incorrect'}">
-          <div class="exam-result-q">
-            <strong>Q${idx + 1}:</strong> ${item.question}
-          </div>
-          <div class="exam-result-a">
-            <div class="exam-result-label">Your answer:</div>
-            <div class="exam-result-value ${r.correct ? 'correct' : 'wrong'}">${userAnswer}</div>
-          </div>
-          ${!r.correct ? `
-            <div class="exam-result-a">
-              <div class="exam-result-label">Correct answer:</div>
-              <div class="exam-result-value correct">${item.canonical_answer}</div>
-            </div>
-          ` : ''}
-          ${r.explanation ? `
-            <div class="exam-result-explain">${r.explanation}</div>
-          ` : ''}
-        </div>
-      `;
-    }).join('');
-  }
-  
-  return { renderTaking, renderResults };
-})();
-
-
 // UI HELPERS
 // ══════════════════════════════════════════════════════
 /**
@@ -3694,6 +3331,15 @@ function toast(message, duration = 2500) {
  * Get active API key (user key if set, otherwise global key)
  * @returns {Promise<string|null>} - API key or null
  */
+
+// ══════════════════════════════════════════════════════
+// BACKWARD COMPATIBILITY ALIASES
+// ══════════════════════════════════════════════════════
+// These aliases allow old code to work with new modules
+// TODO: Replace all usages with module calls in Phase 2
+
+const getActiveApiKey = OpenAI.getActiveApiKey;
+const callOpenAI = OpenAI.call;
 
 // ══════════════════════════════════════════════════════
 // PROMPT BUILDERS
@@ -4208,11 +3854,14 @@ async function loadAllData() {
   setSyncStatus('syncing...');
   try {
     console.log('Fetching topics, exercises, vocab, errors...');
+    
+    // Use Database modules instead of direct sb.from() calls
+    const userId = currentUser?.id;
     const [topicsData, exercisesData, vocabData, errorsData] = await Promise.all([
-      Database.topics.getAll(currentUser.id),
-      Database.exercises.getAll(currentUser.id),
-      Database.vocab.getAll(currentUser.id),
-      Database.errors.getAll(currentUser.id)
+      Database.topics.getAll(userId),
+      Database.exercises.getAll(),
+      Database.vocab.getAll(),
+      Database.errors.getAll()
     ]);
     
     console.log('Raw data received:');
@@ -4315,7 +3964,7 @@ async function loadCachedExplanation() {
   const area = document.getElementById('overview-area');
   
   // Check if explanation is cached
-  const { data: cached, error } = await Database.explanations.getByTopicId(currentTopicId, currentUser.id);
+  const { data: cached, error } = await sb.from('explanations').select('*').eq('topic_id', currentTopicId).eq('user_id', currentUser.id).maybeSingle();
   
   if (error) {
     console.error('❌ Error loading cached explanation:', error);
@@ -4436,12 +4085,98 @@ function computeProgress(t) {
 // ══════════════════════════════════════════════════════
 // SIDEBAR
 // ══════════════════════════════════════════════════════
-function renderSidebarTopics() { SidebarController.render(); }
+function renderSidebarTopics() {
+  const el = document.getElementById('sidebar-topics');
+  
+  if (topics.length === 0) {
+    el.innerHTML = '';
+    return;
+  }
+  
+  // Group topics by unit
+  const grouped = {};
+  topics.forEach(t => {
+    const unitKey = t.unit || 'Other';
+    if (!grouped[unitKey]) grouped[unitKey] = [];
+    grouped[unitKey].push(t);
+  });
+  
+  // Sort unit keys (Unidade 1, Unidade 2, ...)
+  const sortedUnits = Object.keys(grouped).sort((a, b) => {
+    if (a === 'Other') return 1;
+    if (b === 'Other') return -1;
+    const aNum = parseInt(a.match(/\d+/)?.[0] || '999');
+    const bNum = parseInt(b.match(/\d+/)?.[0] || '999');
+    return aNum - bNum;
+  });
+  
+  let html = '';
+  
+  sortedUnits.forEach(unitKey => {
+    const unitTopics = grouped[unitKey];
+    
+    // Check if unit is ready for final exam
+    const unitMatch = unitKey.match(/Unidade (\d+)/);
+    let examBadge = '';
+    
+    if (unitMatch) {
+      const unitNumber = parseInt(unitMatch[1]);
+      const readiness = isUnitReadyForExam(unitNumber);
+      const exam = getFinalExam(`unit${unitNumber}`);
+      
+      if (readiness.ready) {
+        if (exam && exam.best_score >= 80) {
+          // Passed
+          examBadge = ` <span class="final-exam-badge passed" onclick="event.stopPropagation();startFinalExam(${unitNumber})" title="Final Exam: ${exam.best_score}%">🎓</span>`;
+        } else if (exam) {
+          // Generated but not passed
+          examBadge = ` <span class="final-exam-badge available" onclick="event.stopPropagation();startFinalExam(${unitNumber})" title="Final Exam Available (${exam.attempts} attempts)">🎓</span>`;
+        } else {
+          // Ready but not generated
+          examBadge = ` <span class="final-exam-badge ready" onclick="event.stopPropagation();startFinalExam(${unitNumber})" title="Final Exam Available">🎓</span>`;
+        }
+      }
+    }
+    
+    // Unit header
+    html += `<div class="sidebar-unit-header">${unitKey}${examBadge}</div>`;
+    
+    // Topics in this unit
+    unitTopics.forEach(t => {
+      const pct = computeProgress(t);
+      const active = t.id === currentTopicId ? ' active' : '';
+      const pillClass = pct === 100 ? ' done' : '';
+      html += `<button class="nav-btn${active}" onclick="showTopicDetail(${t.id})" style="position:relative;padding-right:32px;">
+        <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left">${t.name}</span>
+        <span class="progress-pill${pillClass}">${pct}%</span>
+        <span onclick="event.stopPropagation();deleteTopic(${t.id},'${t.name.replace(/'/g,"\\'")}');" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);opacity:0;transition:opacity .15s;color:var(--red);cursor:pointer;font-size:18px;line-height:1;padding:2px 4px;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.6'" class="delete-topic-btn">×</span>
+      </button>`;
+    });
+  });
+  
+  el.innerHTML = html;
+}
 
 // ══════════════════════════════════════════════════════
 // HOME LIST
 // ══════════════════════════════════════════════════════
-function renderHomeList() { SidebarController.renderHome(); }
+function renderHomeList() {
+  const el = document.getElementById('home-topic-list');
+  if (!topics.length) { el.innerHTML = '<div class="empty">No topics yet. Add your first topic to get started.</div>'; return; }
+  el.innerHTML = topics.map(t => {
+    const pct = computeProgress(t);
+    return `<div class="topic-card" onclick="showTopicDetail(${t.id})">
+      <div class="tc-left">
+        <div class="topic-unit">${t.unit || ''}</div>
+        <div class="topic-name">${t.name}</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:12px;flex-shrink:0;">
+        <div class="prog-bar-wrap"><div class="prog-bar-fill${pct===100?' done':''}" style="width:${pct}%"></div></div>
+        <div class="prog-pct${pct===100?' done':''}">${pct}%</div>
+      </div>
+    </div>`;
+  }).join('');
+}
 
 // ══════════════════════════════════════════════════════
 // TOPIC DETAIL RENDER
@@ -4591,7 +4326,7 @@ async function saveTopic() {
   
   if (editingTopicId) {
     console.log('Updating existing topic...');
-    const { error } = await Database.topics.update(editingTopicId, payload, currentUser.id);
+    const { error } = await sb.from('topics').update(payload).eq('id', editingTopicId).eq('user_id', currentUser.id);
     if (error) { 
       console.error('❌ Update error:', error);
       toast('Error: ' + error.message); 
@@ -4603,7 +4338,7 @@ async function saveTopic() {
     if (currentTopicId === editingTopicId) renderTopicDetail();
   } else {
     console.log('Inserting new topic...');
-    const data = await Database.topics.create(payload);
+    const { data, error } = await sb.from('topics').insert(payload).select().single();
     if (error) { 
       console.error('❌ Insert error:', error);
       toast('Error: ' + error.message); 
@@ -4627,11 +4362,11 @@ async function deleteTopic(topicId, topicName) {
   
   try {
     // Delete from Supabase
-    await Database.exercises.deleteByTopicId(topicId, currentUser.id);
-    await Database.vocab.deleteByTopicId(topicId, currentUser.id);
-    await Database.errors.deleteByTopicId(topicId, currentUser.id);
-    await Database.explanations.deleteByTopicId(topicId, currentUser.id);
-    await Database.topics.delete(topicId, currentUser.id);
+    await sb.from('exercises').delete().eq('topic_id', topicId).eq('user_id', currentUser.id);
+    await sb.from('vocab').delete().eq('topic_id', topicId).eq('user_id', currentUser.id);
+    await sb.from('errors').delete().eq('topic_id', topicId).eq('user_id', currentUser.id);
+    await sb.from('explanations').delete().eq('topic_id', topicId).eq('user_id', currentUser.id);
+    await sb.from('topics').delete().eq('id', topicId).eq('user_id', currentUser.id);
     
     // Remove from local state
     const idx = topics.findIndex(t => t.id === topicId);
@@ -4661,7 +4396,7 @@ async function addVocab() {
   const t = getTopic(currentTopicId);
   if (!t) return;
   if (t.vocab.find(v => v.pt === pt)) { toast('Word already exists'); return; }
-  const data = await Database.vocab.create({topic_id: currentTopicId, user_id: currentUser.id, pt, en});
+  const { data, error } = await sb.from('vocab').insert({ topic_id: currentTopicId, user_id: currentUser.id, pt, en }).select().single();
   if (error) { toast('Error: ' + error.message); return; }
   t.vocab.push(data);
   document.getElementById('vadd-pt').value = '';
@@ -4671,14 +4406,25 @@ async function addVocab() {
 }
 
 async function removeVocab(id) {
-  await Database.vocab.delete(id);
+  await sb.from('vocab').delete().eq('id', id);
   const t = getTopic(currentTopicId);
   if (t) t.vocab = t.vocab.filter(v => v.id !== id);
   renderVocab();
   renderTopicDetail();
 }
 
-function renderVocab() { TopicDetailController.renderVocabList(currentTopic()); }
+function renderVocab() {
+  const t = getTopic(currentTopicId);
+  const el = document.getElementById('vocab-list');
+  if (!t || !t.vocab.length) { el.innerHTML = '<div class="empty">No vocabulary yet.</div>'; return; }
+  el.innerHTML = t.vocab.map(v => `
+    <div class="vocab-row">
+      <span class="vocab-pt">${v.pt}</span>
+      <span class="vocab-ru">${v.en||v.ru||'—'}</span>
+      <span class="vocab-when">${v.added_at||''}</span>
+      <button class="btn btn-ghost btn-sm" style="font-size:10px;padding:2px 8px;" onclick="removeVocab(${v.id})">×</button>
+    </div>`).join('');
+}
 
 // ══════════════════════════════════════════════════════
 // GLOBAL VOCABULARY
@@ -4707,7 +4453,7 @@ async function addGlobalVocab() {
     return;
   }
   
-  const data = await Database.vocab.create(payload);
+  const { data, error } = await sb.from('vocab').insert(payload).select().single();
   if (error) { 
     if (error.code === '23505') { // unique constraint violation
       toast('Word already exists');
@@ -4731,7 +4477,7 @@ async function addGlobalVocab() {
 async function removeGlobalVocab(id, topicId) {
   if (!confirm('Delete this word?')) return;
   
-  await Database.vocab.delete(id);
+  await sb.from('vocab').delete().eq('id', id);
   
   // Remove from local state
   if (topicId) {
@@ -4815,7 +4561,7 @@ function renderGlobalVocabulary() {
 async function toggleErrorFixed(id, currentFixed) {
   // If marking as fixed, delete from database
   if (!currentFixed) {
-    await Database.errors.delete(id);
+    const { error } = await sb.from('errors').delete().eq('id', id);
     if (error) { 
       console.error('Error deleting error:', error);
       toast('Error: ' + error.message); 
@@ -4831,7 +4577,7 @@ async function toggleErrorFixed(id, currentFixed) {
     toast('Error removed');
   } else {
     // If unmarking as fixed (shouldn't happen with delete approach, but keep for safety)
-    await Database.errors.update(id, {fixed: false});
+    const { error } = await sb.from('errors').update({ fixed: false }).eq('id', id);
     if (error) { 
       toast('Error: ' + error.message); 
       return; 
@@ -4848,7 +4594,52 @@ async function toggleErrorFixed(id, currentFixed) {
   renderTopicDetail();
 }
 
-function renderErrors() { TopicDetailController.renderErrorsList(currentTopic()); }
+function renderErrors() {
+  const t = getTopic(currentTopicId);
+  const el = document.getElementById('errors-list');
+  if (!t || !t.errors.length) { el.innerHTML = '<div class="empty">No errors recorded yet. Keep practicing!</div>'; return; }
+
+  // Group by grammar_category
+  const groups = {};
+  t.errors.forEach(e => {
+    const cat = e.grammar_category || e.exercise_meta || 'General';
+    if (!groups[cat]) groups[cat] = [];
+    groups[cat].push(e);
+  });
+
+  // Open errors first, then fixed
+  const sortGroup = arr => [...arr.filter(e=>!e.fixed), ...arr.filter(e=>e.fixed)];
+
+  let html = '';
+  Object.entries(groups).forEach(([cat, errs]) => {
+    const openCount = errs.filter(e=>!e.fixed).length;
+    html += `<div style="margin-bottom:1.5rem;">
+      <div style="font-family:'Geist Mono',monospace;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink3);padding:.5rem 0;border-bottom:1px solid var(--line);margin-bottom:.5rem;display:flex;justify-content:space-between;">
+        <span>${cat}</span>
+        ${openCount ? `<span style="color:var(--red)">${openCount} open</span>` : '<span style="color:var(--green)">all fixed</span>'}
+      </div>`;
+    html += sortGroup(errs).map(e => `
+      <div class="error-row">
+        <div class="check-box${e.fixed?' done':''}" data-error-id="${e.id}" data-fixed="${e.fixed}"></div>
+        <div>
+          <div class="error-text${e.fixed?' done':''}">${e.text}</div>
+          ${e.explanation ? `<div class="error-explanation">${e.explanation}</div>` : ''}
+          <div class="error-meta">${e.created_at?.slice(0,10)||''}</div>
+        </div>
+      </div>`).join('');
+    html += '</div>';
+  });
+  el.innerHTML = html;
+  
+  // Setup event delegation for checkboxes
+  el.onclick = (e) => {
+    const checkBox = e.target.closest('.check-box');
+    if (!checkBox) return;
+    const errorId = parseInt(checkBox.dataset.errorId);
+    const isFixed = checkBox.dataset.fixed === 'true';
+    toggleErrorFixed(errorId, isFixed);
+  };
+}
 
 // ══════════════════════════════════════════════════════
 // TOPIC PROMPT
@@ -4860,7 +4651,7 @@ function loadTopicPrompt() {
 
 async function saveTopicPrompt() {
   const val = document.getElementById('topic-prompt-input').value;
-  await Database.topics.update(currentTopicId, {custom_prompt: val}, currentUser.id);
+  await sb.from('topics').update({ custom_prompt: val }).eq('id', currentTopicId).eq('user_id', currentUser.id);
   const t = getTopic(currentTopicId);
   if (t) t.custom_prompt = val;
   toast('Prompt saved');
@@ -4952,7 +4743,52 @@ async function removeUserApiKey() {
 // ADMIN PANEL FUNCTIONS
 // ══════════════════════════════════════════════════════
 
-async function loadAdminPanel() { await AdminViewController.loadPanel(); }
+async function loadAdminPanel() {
+  // Load global API key
+  const { data: settings } = await sb
+    .from('system_settings')
+    .select('*');
+  
+  settings?.forEach(s => {
+    if (s.setting_key === 'global_api_key') {
+      const input = document.getElementById('admin-global-key');
+      if (input) {
+        const key = s.setting_value || '';
+        input.value = key ? '••••••••' + key.slice(-4) : '';
+      }
+      
+      const status = document.getElementById('global-key-status');
+      if (status) {
+        if (s.setting_value) {
+          status.textContent = 'Set ✓';
+          status.className = 'key-status set';
+        } else {
+          status.textContent = 'Not set';
+          status.className = 'key-status unset';
+        }
+      }
+    }
+  });
+  
+  // Load all prompts
+  const promptTypes = ['default', 'overview', 'grading', 'validator', 'exam_grading'];
+  for (const type of promptTypes) {
+    const promptData = systemPrompts[type === 'overview' ? 'topic_overview' : type];
+    if (promptData) {
+      const textareaId = `admin-prompt-${type}`;
+      const modelId = `admin-prompt-${type}-model`;
+      const tempId = `admin-prompt-${type}-temp`;
+      
+      const textarea = document.getElementById(textareaId);
+      const modelSelect = document.getElementById(modelId);
+      const tempInput = document.getElementById(tempId);
+      
+      if (textarea) textarea.value = promptData.content;
+      if (modelSelect) modelSelect.value = promptData.model;
+      if (tempInput) tempInput.value = promptData.temperature;
+    }
+  }
+}
 
 async function saveGlobalApiKey() {
   const val = document.getElementById('admin-global-key').value.trim();
@@ -5061,7 +4897,82 @@ let currentEditingPromptId = null;
 /**
  * Render topic prompts list in admin panel
  */
-async function renderTopicPromptsAdmin() { await AdminViewController.renderTopicPrompts(); }
+async function renderTopicPromptsAdmin() {
+  const container = document.getElementById('topic-prompts-list');
+  const searchInput = document.getElementById('topic-prompt-search');
+  const filterSelect = document.getElementById('topic-prompt-filter');
+  
+  if (!container) return;
+  
+  container.innerHTML = '<div style="color:var(--ink3);text-align:center;padding:2rem;">Loading prompts...</div>';
+  
+  try {
+    const { data, error } = await sb
+      .from('topic_prompts')
+      .select('*')
+      .order('category', { ascending: true })
+      .order('prompt_name', { ascending: true });
+    
+    if (error) throw error;
+    
+    if (!data || data.length === 0) {
+      container.innerHTML = '<div style="color:var(--ink3);text-align:center;padding:2rem;">No topic prompts found. Click "+ Add Prompt" to create one.</div>';
+      return;
+    }
+    
+    // Apply filters
+    let filtered = data;
+    
+    // Category filter
+    const categoryFilter = filterSelect?.value || '';
+    if (categoryFilter) {
+      filtered = filtered.filter(p => p.category === categoryFilter);
+    }
+    
+    // Search filter
+    const searchTerm = searchInput?.value.toLowerCase() || '';
+    if (searchTerm) {
+      filtered = filtered.filter(p => 
+        p.prompt_name.toLowerCase().includes(searchTerm) ||
+        p.description?.toLowerCase().includes(searchTerm) ||
+        p.prompt_content.toLowerCase().includes(searchTerm)
+      );
+    }
+    
+    if (filtered.length === 0) {
+      container.innerHTML = '<div style="color:var(--ink3);text-align:center;padding:2rem;">No prompts match your filters.</div>';
+      return;
+    }
+    
+    // Render cards
+    container.innerHTML = filtered.map(prompt => `
+      <div class="topic-prompt-card">
+        <div class="topic-prompt-card-header">
+          <div>
+            <div class="topic-prompt-card-title">
+              ${escapeHtml(prompt.prompt_name)}
+              ${prompt.is_default ? '<span class="badge-default">DEFAULT</span>' : ''}
+            </div>
+            <div class="topic-prompt-card-meta">
+              <span class="topic-prompt-card-category">${getCategoryLabel(prompt.category)}</span>
+              ${prompt.description ? `<span>${escapeHtml(prompt.description)}</span>` : ''}
+            </div>
+          </div>
+        </div>
+        <div class="topic-prompt-card-content">${escapeHtml(prompt.prompt_content)}</div>
+        <div class="topic-prompt-card-actions">
+          <button class="btn secondary" onclick="editTopicPrompt(${prompt.id})">Edit</button>
+          <button class="btn secondary" onclick="duplicateTopicPrompt(${prompt.id})" title="Duplicate this prompt">Duplicate</button>
+          <button class="btn secondary" style="color:var(--red);" onclick="deleteTopicPrompt(${prompt.id}, '${escapeHtml(prompt.prompt_name).replace(/'/g, "\\'")}')">Delete</button>
+        </div>
+      </div>
+    `).join('');
+    
+  } catch (err) {
+    console.error('Error loading topic prompts:', err);
+    container.innerHTML = '<div style="color:var(--red);text-align:center;padding:2rem;">Error loading prompts. Check console.</div>';
+  }
+}
 
 /**
  * Get category label for display
@@ -5267,7 +5178,55 @@ let currentEditingExamPromptId = null;
 /**
  * Render exam prompts list in admin panel
  */
-async function renderExamPromptsAdmin() { await AdminViewController.renderExamPrompts(); }
+async function renderExamPromptsAdmin() {
+  const container = document.getElementById('exam-prompts-list');
+  
+  if (!container) return;
+  
+  container.innerHTML = '<div style="color:var(--ink3);text-align:center;padding:2rem;">Loading exam prompts...</div>';
+  
+  try {
+    const { data, error } = await sb
+      .from('exam_prompts')
+      .select('*')
+      .order('unit_key', { ascending: true });
+    
+    if (error) throw error;
+    
+    if (!data || data.length === 0) {
+      container.innerHTML = '<div style="color:var(--ink3);text-align:center;padding:2rem;">No exam prompts found. Click "+ Add Exam Prompt" to create one.</div>';
+      return;
+    }
+    
+    // Render cards
+    container.innerHTML = data.map(prompt => `
+      <div class="exam-prompt-card">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:0.75rem;">
+          <div>
+            <div style="font-family:'EB Garamond',serif;font-size:18px;font-weight:500;color:var(--ink1);">
+              ${escapeHtml(prompt.unit_name)}
+              ${prompt.is_active ? '<span style="display:inline-block;padding:2px 6px;background:var(--green);color:white;border-radius:3px;font-size:10px;margin-left:8px;">ACTIVE</span>' : ''}
+            </div>
+            <div style="font-size:12px;color:var(--ink3);margin-top:0.25rem;">
+              ${prompt.description || 'No description'}
+            </div>
+          </div>
+        </div>
+        <div style="font-size:14px;color:var(--ink2);line-height:1.6;margin-bottom:0.75rem;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;">
+          ${escapeHtml(prompt.prompt_content)}
+        </div>
+        <div style="display:flex;gap:8px;margin-top:0.75rem;">
+          <button class="btn secondary" onclick="editExamPrompt(${prompt.id})">Edit</button>
+          <button class="btn secondary" style="color:var(--red);" onclick="deleteExamPrompt(${prompt.id}, '${escapeHtml(prompt.unit_name).replace(/'/g, "\\'")}')">Delete</button>
+        </div>
+      </div>
+    `).join('');
+    
+  } catch (err) {
+    console.error('Error loading exam prompts:', err);
+    container.innerHTML = '<div style="color:var(--red);text-align:center;padding:2rem;">Error loading exam prompts. Check console.</div>';
+  }
+}
 
 /**
  * Open modal to add new exam prompt
@@ -5613,7 +5572,75 @@ ${JSON.stringify(normalizedAnswers, null, 2)}`;
 /**
  * Render topic explanation HTML from structured data
  */
-function renderTopicExplanation(explainData) { TopicDetailController.renderOverview(explainData); }
+function renderTopicExplanation(explainData) {
+  let html = `<div data-explanation style="border:1px solid var(--line);padding:1.25rem 1.5rem;background:var(--white);margin-bottom:1.25rem;">
+    <div style="font-family:'Geist Mono',monospace;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink3);margin-bottom:.75rem;">Topic overview</div>
+    <div style="font-size:15px;color:var(--ink2);line-height:1.75;margin-bottom:1rem;">${explainData.summary}</div>`;
+  
+  // Key rules
+  if (explainData.key_rules && explainData.key_rules.length > 0) {
+    html += `<div style="margin-bottom:1rem;">
+      <div style="font-family:'Geist Mono',monospace;font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink3);margin-bottom:.5rem;">Key Rules</div>`;
+    explainData.key_rules.forEach(rule => {
+      html += `<div style="font-size:14px;color:var(--ink2);margin-bottom:.3rem;">• ${rule}</div>`;
+    });
+    html += `</div>`;
+  }
+  
+  // Examples
+  if (explainData.examples && explainData.examples.length > 0) {
+    html += `<div style="margin-bottom:1rem;">
+      <div style="font-family:'Geist Mono',monospace;font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink3);margin-bottom:.5rem;">Examples</div>`;
+    explainData.examples.forEach(ex => {
+      html += `<div style="font-size:14px;margin-bottom:.4rem;">
+        <span style="color:var(--ink);font-weight:500;">${ex.pt}</span>
+        <span style="color:var(--ink3);margin-left:.5rem;">→ ${ex.en}</span>
+      </div>`;
+    });
+    html += `</div>`;
+  }
+  
+  // Artifacts (grammar components)
+  if (explainData.artifacts && Object.keys(explainData.artifacts).length > 0) {
+    html += `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:.75rem;margin-top:1rem;">`;
+    
+    for (const [category, items] of Object.entries(explainData.artifacts)) {
+      if (!items || items.length === 0) continue;
+      
+      const categoryTitle = category.charAt(0).toUpperCase() + category.slice(1);
+      
+      // Special rendering for VERBS with conjugation tables
+      if (category === 'verbs' && items[0]?.conjugations) {
+        items.forEach(verb => {
+          html += `<div style="background:var(--bg);padding:.75rem;border-radius:4px;border:1px solid var(--line);">
+            <div style="font-family:'Geist Mono',monospace;font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink3);margin-bottom:.5rem;">${verb.infinitive} — ${verb.translation}</div>
+            <div style="font-size:10px;color:var(--ink3);margin-bottom:.4rem;font-style:italic;">${verb.tense || 'Present'}</div>
+            <table style="width:100%;font-size:13px;">`;
+          verb.conjugations.forEach(c => {
+            html += `<tr>
+              <td style="color:var(--ink3);padding:2px 6px 2px 0;width:45%;">${c.pronoun}</td>
+              <td style="color:var(--ink);font-weight:500;padding:2px 0;">${c.form}</td>
+            </tr>`;
+          });
+          html += `</table></div>`;
+        });
+      } else {
+        // Standard rendering for other categories
+        html += `<div style="background:var(--bg);padding:.75rem;border-radius:4px;border:1px solid var(--line);">
+          <div style="font-family:'Geist Mono',monospace;font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink3);margin-bottom:.5rem;">${categoryTitle}</div>`;
+        items.forEach(item => {
+          const displayText = typeof item === 'string' ? item : `${item.pt || item.infinitive} (${item.en || item.translation})`;
+          html += `<div style="font-size:13px;color:var(--ink2);margin-bottom:.2rem;">${displayText}</div>`;
+        });
+        html += `</div>`;
+      }
+    }
+    html += `</div>`;
+  }
+  
+  html += `</div>`;
+  return html;
+}
 
 // ══════════════════════════════════════════════════════
 // EXERCISE VALIDATION & GENERATION
@@ -5665,7 +5692,7 @@ async function validateExercises(exerciseJSON, apiKey) {
     const model = validatorPromptData?.model || 'gpt-5.4-mini';
     const temperature = validatorPromptData?.temperature || 0;
     
-    const validation = await OpenAI.call(apiKey, buildValidatorPrompt(exerciseJSON), {
+    const validation = await callOpenAI(apiKey, buildValidatorPrompt(exerciseJSON), {
       model: model,
       temperature: temperature,
       schema: VALIDATOR_SCHEMA,
@@ -5699,7 +5726,7 @@ async function generateTopicOverview() {
   status.classList.add('loading');
   
   try {
-    const explainData = await OpenAI.call(apiKey, buildTopicOverviewPrompt(topic), {
+    const explainData = await callOpenAI(apiKey, buildTopicOverviewPrompt(topic), {
       model: model,
       temperature: temperature,
       schema: TOPIC_OVERVIEW_SCHEMA,
@@ -5707,7 +5734,7 @@ async function generateTopicOverview() {
     });
     
     // Save to cache
-    await Database.explanations.upsert({
+    await sb.from('explanations').upsert({
       topic_id: currentTopicId,
       user_id: currentUser.id,
       text: JSON.stringify(explainData),
@@ -5737,7 +5764,7 @@ async function explainThenGenerate() {
   const status = document.getElementById('gen-status');
   
   // Check cache first
-  const { data: cached, error: cacheError } = await Database.explanations.getByTopicId(currentTopicId, currentUser.id);
+  const { data: cached, error: cacheError } = await sb.from('explanations').select('*').eq('topic_id', currentTopicId).eq('user_id', currentUser.id).maybeSingle();
   
   if (cacheError) {
     console.error('❌ Error loading cached explanation:', cacheError);
@@ -5761,7 +5788,7 @@ async function explainThenGenerate() {
     status.classList.add('loading');
 
     try {
-      const explainData = await OpenAI.call(apiKey, buildTopicOverviewPrompt(topic), {
+      const explainData = await callOpenAI(apiKey, buildTopicOverviewPrompt(topic), {
         model: 'gpt-5.4-mini',
         temperature: 0.2,
         schema: TOPIC_OVERVIEW_SCHEMA,
@@ -5769,7 +5796,7 @@ async function explainThenGenerate() {
       });
       
       // Save to cache
-      await Database.explanations.upsert({
+      await sb.from('explanations').upsert({
         topic_id: currentTopicId,
         user_id: currentUser.id,
         text: JSON.stringify(explainData)
@@ -5815,7 +5842,7 @@ async function generateExercise() {
 
   try {
     // Generate exercises
-    let exerciseData = await OpenAI.call(apiKey, buildPrompt(topic), {
+    let exerciseData = await callOpenAI(apiKey, buildPrompt(topic), {
       model: model,
       temperature: temperature,
       schema: EXERCISE_SCHEMA,
@@ -5856,7 +5883,7 @@ async function generateExercise() {
       console.log('📝 Full exercise data:', JSON.stringify(exerciseData, null, 2));
       status.textContent = 'Regenerating (quality check failed)';
       
-      exerciseData = await OpenAI.call(apiKey, buildPrompt(topic), {
+      exerciseData = await callOpenAI(apiKey, buildPrompt(topic), {
         model: 'gpt-5.4-mini',
         temperature: 0.35,
         schema: EXERCISE_SCHEMA,
@@ -5886,7 +5913,7 @@ async function generateExercise() {
       console.warn('Validation failed, regenerating:', validation.issues);
       status.textContent = 'Regenerating';
       
-      exerciseData = await OpenAI.call(apiKey, buildPrompt(topic), {
+      exerciseData = await callOpenAI(apiKey, buildPrompt(topic), {
         model: 'gpt-5.4-mini',
         temperature: 0.35,
         schema: EXERCISE_SCHEMA,
@@ -6030,7 +6057,7 @@ async function submitExercise() {
     const model = gradingPromptData?.model || 'gpt-5.4-mini';
     const temperature = gradingPromptData?.temperature || 0;
     
-    const grading = await OpenAI.call(apiKey, buildGradingPrompt(normalizedAnswers), {
+    const grading = await callOpenAI(apiKey, buildGradingPrompt(normalizedAnswers), {
       model: model,
       temperature: temperature,
       schema: GRADING_SCHEMA,
@@ -6119,7 +6146,7 @@ async function processGrading(results, answers) {
 
   // Save to Supabase (wrapped in try-catch to ensure UI updates always happen)
   try {
-    const exData = await Database.exercises.create(currentTopicId, errorCount, currentUser.id);
+    const { data: exData, error: exError } = await sb.from('exercises').insert({ topic_id: currentTopicId, user_id: currentUser.id, error_count: errorCount }).select().single();
     
     if (exError) {
       console.error('Error saving exercise:', exError);
@@ -6128,7 +6155,7 @@ async function processGrading(results, answers) {
     }
 
     if (newErrors.length) {
-      const errData = await Database.errors.createMany(newErrors);
+      const { data: errData, error: errError } = await sb.from('errors').insert(newErrors).select();
       
       if (errError) {
         console.error('Error saving errors:', errError);
@@ -6138,7 +6165,7 @@ async function processGrading(results, answers) {
     }
     
     if (newVocab.length) {
-      const vocData = await Database.vocab.upsertMany(newVocab);
+      const { data: vocData, error: vocError } = await sb.from('vocab').upsert(newVocab, { onConflict: 'topic_id,pt', ignoreDuplicates: true }).select();
       
       if (vocError) {
         console.error('Error saving vocab:', vocError);
@@ -6460,7 +6487,7 @@ async function generateFinalExam(unitNumber, unitTopics) {
 
   try {
     // Call OpenAI with correct argument order: (apiKey, prompt, options)
-    const response = await OpenAI.call(apiKey, prompt, {
+    const response = await callOpenAI(apiKey, prompt, {
       model: 'gpt-4o-mini',
       temperature: 0.4,
       schema: EXERCISE_SCHEMA,
@@ -6514,7 +6541,23 @@ let currentExamAnswers = {};
 /**
  * Show final exam taking interface
  */
-function showFinalExamTaking(exam) { ExamViewController.renderTaking(exam); }
+function showFinalExamTaking(exam) {
+  currentExam = exam;
+  currentExamAnswers = {};
+  
+  showView('final-exam');
+  
+  // Set metadata
+  const attemptNum = exam.attempts + 1;
+  document.getElementById('exam-unit-name').textContent = `${exam.unit_name} — Final Exam`;
+  document.getElementById('exam-meta').textContent = `${exam.questions.length} questions · Attempt #${attemptNum}`;
+  
+  // Reset progress
+  updateExamProgress();
+  
+  // Render all questions
+  renderExamQuestions(exam.questions);
+}
 
 /**
  * Render all exam questions
@@ -6800,7 +6843,7 @@ Return ONLY valid JSON:
       additionalProperties: false
     };
     
-    const response = await OpenAI.call(apiKey, prompt, {
+    const response = await callOpenAI(apiKey, prompt, {
       model: model,
       temperature: temperature,
       schema: gradingSchema,
