@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Português — Learning Journal</title>
-<!-- VERSION: v10.0.1 | Build: 2026-04-03 | FIX: Added getAll() methods to Database modules -->
+<!-- VERSION: v10.0.2 | Build: 2026-04-03 | FIX: vocab table uses added_at, not created_at -->
 <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;1,400&family=Geist+Mono:wght@300;400;500&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <style>
@@ -1006,10 +1006,10 @@ main{padding:2.5rem 3rem;max-width:760px;}
 // ══════════════════════════════════════════════════════
 // VERSION INFO
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v10.0.1';
+const APP_VERSION = 'v10.0.2';
 const BUILD_DATE = '2026-04-03';
 console.log(`%c🇵🇹 Portuguese Learning Journal ${APP_VERSION}`, 'font-weight: bold; font-size: 14px; color: #2a6b3f;');
-console.log(`Build: ${BUILD_DATE} | FIX: Added Database.*.getAll() methods`);
+console.log(`Build: ${BUILD_DATE} | FIX: Database modules + vocab.added_at`);
 
 // ══════════════════════════════════════════════════════
 // CONFIGURATION & CONSTANTS
@@ -1563,7 +1563,7 @@ const Database = (() => {
   const vocab = {
     async getAll() {
       return query('vocab', q => 
-        q.select('*').order('created_at', { ascending: false }),
+        q.select('*').order('added_at', { ascending: false }),
         { op: 'getAll vocab' }
       );
     },
@@ -1577,7 +1577,7 @@ const Database = (() => {
     
     async getAllForTopic(topicId) {
       return query('vocab', q => 
-        q.select('*').eq('topic_id', topicId).order('created_at', { ascending: false }),
+        q.select('*').eq('topic_id', topicId).order('added_at', { ascending: false }),
         { op: 'get vocab for topic' }
       );
     },
