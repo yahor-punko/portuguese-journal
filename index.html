@@ -3604,10 +3604,13 @@ const AdminViewController = (() => {
   }
   
   async function renderTopicPrompts() {
+    console.log('[AdminPanel] renderTopicPrompts called');
     const { data: prompts, error } = await sb
       .from('topic_prompts')
       .select('*')
       .order('category, prompt_name', { ascending: true });
+    
+    console.log('[AdminPanel] Topic prompts response:', { prompts, error });
     
     if (error) {
       console.error('Error loading topic prompts:', error);
@@ -3615,7 +3618,12 @@ const AdminViewController = (() => {
     }
     
     const tbody = document.getElementById('topic-prompts-tbody');
-    if (!tbody) return;
+    if (!tbody) {
+      console.error('[AdminPanel] tbody element not found!');
+      return;
+    }
+    
+    console.log('[AdminPanel] Prompts count:', prompts?.length || 0);
     
     if (!prompts || prompts.length === 0) {
       tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:2rem;color:var(--ink3);">No topic prompts yet. Create one above.</td></tr>';
@@ -3633,6 +3641,8 @@ const AdminViewController = (() => {
         </td>
       </tr>
     `).join('');
+    
+    console.log('[AdminPanel] Table rendered with', prompts.length, 'prompts');
   }
   
   async function renderExamPrompts() {
