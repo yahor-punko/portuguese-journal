@@ -3639,15 +3639,20 @@ const AdminViewController = (() => {
       <div class="topic-prompt-card">
         <div class="topic-prompt-card-header">
           <div>
-            <div class="topic-prompt-card-title">${p.prompt_name}</div>
+            <div class="topic-prompt-card-title">
+              ${p.prompt_name}
+              ${p.is_default ? '<span class="badge-default">DEFAULT</span>' : ''}
+            </div>
             <div class="topic-prompt-card-meta">
               <span class="topic-prompt-card-category">${p.category || 'General'}</span>
+              ${p.description ? `<span>${p.description}</span>` : ''}
             </div>
           </div>
         </div>
-        <div class="topic-prompt-card-content">${p.content || 'No description'}</div>
+        <div class="topic-prompt-card-content">${p.prompt_content || 'No content'}</div>
         <div class="topic-prompt-card-actions">
           <button class="btn secondary" onclick="editTopicPrompt(${p.id})">Edit</button>
+          <button class="btn secondary" onclick="duplicateTopicPrompt(${p.id})" title="Duplicate this prompt">Duplicate</button>
           <button class="btn secondary" style="color:var(--red);" onclick="deleteTopicPrompt(${p.id}, '${(p.prompt_name || '').replace(/'/g, "\\'")}')">Delete</button>
         </div>
       </div>
@@ -3680,17 +3685,18 @@ const AdminViewController = (() => {
         <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:0.75rem;">
           <div>
             <div style="font-family:'EB Garamond',serif;font-size:18px;font-weight:500;color:var(--ink1);">
-              ${p.unit_key}
+              ${p.unit_name || p.unit_key}
               ${p.is_active ? '<span style="display:inline-block;padding:2px 6px;background:var(--green);color:white;border-radius:3px;font-size:10px;margin-left:8px;">ACTIVE</span>' : ''}
             </div>
+            ${p.description ? `<div style="font-size:12px;color:var(--ink3);margin-top:0.25rem;">${p.description}</div>` : ''}
           </div>
         </div>
         <div style="font-size:14px;color:var(--ink2);line-height:1.6;margin-bottom:0.75rem;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;">
-          ${p.content || 'No description'}
+          ${p.prompt_content || 'No content'}
         </div>
         <div style="display:flex;gap:8px;margin-top:0.75rem;">
           <button class="btn secondary" onclick="editExamPrompt(${p.id})">Edit</button>
-          <button class="btn secondary" style="color:var(--red);" onclick="deleteExamPrompt(${p.id}, '${(p.unit_key || '').replace(/'/g, "\\'")}')">Delete</button>
+          <button class="btn secondary" style="color:var(--red);" onclick="deleteExamPrompt(${p.id}, '${(p.unit_name || p.unit_key || '').replace(/'/g, "\\'")}')">Delete</button>
         </div>
       </div>
     `).join('');
