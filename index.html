@@ -3617,32 +3617,36 @@ const AdminViewController = (() => {
       return;
     }
     
-    const tbody = document.getElementById('topic-prompts-tbody');
-    if (!tbody) {
-      console.error('[AdminPanel] tbody element not found!');
+    const container = document.getElementById('topic-prompts-list');
+    if (!container) {
+      console.error('[AdminPanel] topic-prompts-list element not found!');
       return;
     }
     
     console.log('[AdminPanel] Prompts count:', prompts?.length || 0);
     
     if (!prompts || prompts.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:2rem;color:var(--ink3);">No topic prompts yet. Create one above.</td></tr>';
+      container.innerHTML = '<div style="color:var(--ink3);text-align:center;padding:2rem;">No topic prompts yet. Create one above.</div>';
       return;
     }
     
-    tbody.innerHTML = prompts.map(p => `
-      <tr>
-        <td>${p.category || 'General'}</td>
-        <td><strong>${p.prompt_name}</strong></td>
-        <td style="max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${p.content.substring(0, 100)}...</td>
-        <td>
-          <button class="admin-btn-sm" onclick="editTopicPrompt(${p.id})">Edit</button>
-          <button class="admin-btn-sm danger" onclick="deleteTopicPrompt(${p.id}, '${p.prompt_name.replace(/'/g, "\'")}')">Delete</button>
-        </td>
-      </tr>
+    container.innerHTML = prompts.map(p => `
+      <div style="padding:1rem;border:1px solid var(--border);border-radius:4px;background:var(--bg);">
+        <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:0.5rem;">
+          <div>
+            <div style="font-size:11px;color:var(--ink4);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">${p.category || 'General'}</div>
+            <div style="font-weight:600;font-size:14px;">${p.prompt_name}</div>
+          </div>
+          <div style="display:flex;gap:6px;">
+            <button class="admin-btn-sm" onclick="editTopicPrompt(${p.id})">Edit</button>
+            <button class="admin-btn-sm danger" onclick="deleteTopicPrompt(${p.id}, '${p.prompt_name.replace(/'/g, "\\'")}')">Delete</button>
+          </div>
+        </div>
+        <div style="font-size:13px;color:var(--ink3);line-height:1.5;">${p.content.substring(0, 150)}...</div>
+      </div>
     `).join('');
     
-    console.log('[AdminPanel] Table rendered with', prompts.length, 'prompts');
+    console.log('[AdminPanel] List rendered with', prompts.length, 'prompts');
   }
   
   async function renderExamPrompts() {
@@ -3656,23 +3660,27 @@ const AdminViewController = (() => {
       return;
     }
     
-    const tbody = document.getElementById('exam-prompts-tbody');
-    if (!tbody) return;
+    const container = document.getElementById('exam-prompts-list');
+    if (!container) return;
     
     if (!prompts || prompts.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:2rem;color:var(--ink3);">No exam prompts yet. Create one above.</td></tr>';
+      container.innerHTML = '<div style="color:var(--ink3);text-align:center;padding:2rem;">No exam prompts yet. Create one above.</div>';
       return;
     }
     
-    tbody.innerHTML = prompts.map(p => `
-      <tr>
-        <td><strong>${p.unit_key}</strong></td>
-        <td style="max-width:400px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${p.content.substring(0, 150)}...</td>
-        <td>
-          <button class="admin-btn-sm" onclick="editExamPrompt(${p.id})">Edit</button>
-          <button class="admin-btn-sm danger" onclick="deleteExamPrompt(${p.id}, '${p.unit_key.replace(/'/g, "\'")}')">Delete</button>
-        </td>
-      </tr>
+    container.innerHTML = prompts.map(p => `
+      <div style="padding:1rem;border:1px solid var(--border);border-radius:4px;background:var(--bg);">
+        <div style="display:flex;justify-content:space-between;align-items:start;">
+          <div style="flex:1;">
+            <div style="font-weight:600;font-size:14px;margin-bottom:8px;">${p.unit_key}</div>
+            <div style="font-size:13px;color:var(--ink3);line-height:1.5;">${p.content.substring(0, 200)}...</div>
+          </div>
+          <div style="display:flex;gap:6px;margin-left:1rem;">
+            <button class="admin-btn-sm" onclick="editExamPrompt(${p.id})">Edit</button>
+            <button class="admin-btn-sm danger" onclick="deleteExamPrompt(${p.id}, '${p.unit_key.replace(/'/g, "\\'")}')">Delete</button>
+          </div>
+        </div>
+      </div>
     `).join('');
   }
   
@@ -5806,7 +5814,7 @@ async function validateExercises(exerciseJSON, apiKey) {
 
 // Generate only topic overview without exercises
 async function generateTopicOverview() {
-  const apiKey = await getActiveApiKey();
+  const apiKey = await OpenAI.getActiveApiKey();
   if (!apiKey) { 
     toast('No API key configured. Contact administrator or set personal key in Settings.'); 
     return; 
@@ -5915,7 +5923,7 @@ async function explainThenGenerate() {
 }
 
 async function generateExercise() {
-  const apiKey = await getActiveApiKey();
+  const apiKey = await OpenAI.getActiveApiKey();
   if (!apiKey) { 
     toast('No API key configured. Contact administrator or set personal key in Settings.'); 
     return; 
@@ -6089,7 +6097,7 @@ async function submitExercise() {
     return;
   }
   
-  const apiKey = await getActiveApiKey();
+  const apiKey = await OpenAI.getActiveApiKey();
   if (!apiKey) { 
     toast('No API key configured. Contact administrator or set personal key in Settings.'); 
     return; 
@@ -6565,7 +6573,7 @@ async function generateFinalExam(unitNumber, unitTopics) {
   const unitKey = `unit${unitNumber}`;
   
   // Get API key
-  const apiKey = await getActiveApiKey();
+  const apiKey = await OpenAI.getActiveApiKey();
   if (!apiKey) {
     toast('No API key configured. Contact administrator.');
     return null;
@@ -6836,7 +6844,7 @@ async function submitFinalExamAnswers() {
  */
 async function gradeFinalExam(exam, userAnswers) {
   // Get API key
-  const apiKey = await getActiveApiKey();
+  const apiKey = await OpenAI.getActiveApiKey();
   if (!apiKey) {
     toast('No API key configured');
     return null;
