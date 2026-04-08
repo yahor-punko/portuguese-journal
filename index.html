@@ -1738,6 +1738,13 @@ const Database = (() => {
       return result;
     },
     
+    async upsert(data, options = {}) {
+      return query('explanations', q => 
+        q.upsert(data, options),
+        { op: 'upsert explanation' }
+      );
+    },
+    
     async deleteAllForTopic(topicId) {
       return query('explanations', q => 
         q.delete().eq('topic_id', topicId),
@@ -3657,18 +3664,20 @@ const AdminViewController = (() => {
     }
     
     container.innerHTML = prompts.map(p => `
-      <div style="padding:1rem;border:1px solid var(--border);border-radius:4px;background:var(--bg);">
-        <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:0.5rem;">
+      <div class="topic-prompt-card">
+        <div class="topic-prompt-card-header">
           <div>
-            <div style="font-size:11px;color:var(--ink4);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">${p.category || 'General'}</div>
-            <div style="font-weight:600;font-size:14px;">${p.prompt_name}</div>
-          </div>
-          <div style="display:flex;gap:6px;">
-            <button class="admin-btn-sm" onclick="editTopicPrompt(${p.id})">Edit</button>
-            <button class="admin-btn-sm danger" onclick="deleteTopicPrompt(${p.id}, '${p.prompt_name.replace(/'/g, "\\'")}')">Delete</button>
+            <div class="topic-prompt-card-title">${p.prompt_name}</div>
+            <div class="topic-prompt-card-meta">
+              <span class="topic-prompt-card-category">${p.category || 'General'}</span>
+            </div>
           </div>
         </div>
-        <div style="font-size:13px;color:var(--ink3);line-height:1.5;">${(p.content || '').substring(0, 150)}${p.content && p.content.length > 150 ? '...' : ''}</div>
+        <div class="topic-prompt-card-content">${p.content || 'No description'}</div>
+        <div class="topic-prompt-card-actions">
+          <button class="btn secondary" onclick="editTopicPrompt(${p.id})">Edit</button>
+          <button class="btn secondary" style="color:var(--red);" onclick="deleteTopicPrompt(${p.id}, '${(p.prompt_name || '').replace(/'/g, "\\'")}')">Delete</button>
+        </div>
       </div>
     `).join('');
     
@@ -3695,16 +3704,21 @@ const AdminViewController = (() => {
     }
     
     container.innerHTML = prompts.map(p => `
-      <div style="padding:1rem;border:1px solid var(--border);border-radius:4px;background:var(--bg);">
-        <div style="display:flex;justify-content:space-between;align-items:start;">
-          <div style="flex:1;">
-            <div style="font-weight:600;font-size:14px;margin-bottom:8px;">${p.unit_key}</div>
-            <div style="font-size:13px;color:var(--ink3);line-height:1.5;">${(p.content || '').substring(0, 200)}${p.content && p.content.length > 200 ? '...' : ''}</div>
+      <div class="exam-prompt-card">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:0.75rem;">
+          <div>
+            <div style="font-family:'EB Garamond',serif;font-size:18px;font-weight:500;color:var(--ink1);">
+              ${p.unit_key}
+              ${p.is_active ? '<span style="display:inline-block;padding:2px 6px;background:var(--green);color:white;border-radius:3px;font-size:10px;margin-left:8px;">ACTIVE</span>' : ''}
+            </div>
           </div>
-          <div style="display:flex;gap:6px;margin-left:1rem;">
-            <button class="admin-btn-sm" onclick="editExamPrompt(${p.id})">Edit</button>
-            <button class="admin-btn-sm danger" onclick="deleteExamPrompt(${p.id}, '${p.unit_key.replace(/'/g, "\\'")}')">Delete</button>
-          </div>
+        </div>
+        <div style="font-size:14px;color:var(--ink2);line-height:1.6;margin-bottom:0.75rem;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;">
+          ${p.content || 'No description'}
+        </div>
+        <div style="display:flex;gap:8px;margin-top:0.75rem;">
+          <button class="btn secondary" onclick="editExamPrompt(${p.id})">Edit</button>
+          <button class="btn secondary" style="color:var(--red);" onclick="deleteExamPrompt(${p.id}, '${(p.unit_key || '').replace(/'/g, "\\'")}')">Delete</button>
         </div>
       </div>
     `).join('');
@@ -6279,31 +6293,29 @@ async function processGrading(results, answers) {
 
   // Save to Supabase (wrapped in try-catch to ensure UI updates always happen)
   try {
-    const exData = await Database.exercises.create(currentTopicId, errorCount, currentUser.id);
+    const exData = await Database.exercises.create(currentTopicId, errorCount);
     
-    if (exError) {
-      console.error('Error saving exercise:', exError);
-    } else if (exData) {
+    if (!exData) {
+      console.error('Error saving exercise: no data returned');
+    } else {
       topic.exercises.push(exData);
     }
 
     if (newErrors.length) {
-      const errData = await Database.errors.createMany(newErrors);
-      
-      if (errError) {
-        console.error('Error saving errors:', errError);
-      } else if (errData) {
-        topic.errors.push(...errData);
+      for (const err of newErrors) {
+        const errData = await Database.errors.create(err.topic_id, err.text, err.explanation, err.grammar_category);
+        if (errData) {
+          topic.errors.push(errData);
+        }
       }
     }
     
     if (newVocab.length) {
-      const vocData = await Database.vocab.upsertMany(newVocab);
-      
-      if (vocError) {
-        console.error('Error saving vocab:', vocError);
-      } else if (vocData) {
-        vocData.forEach(v => { if (!topic.vocab.find(x => x.id === v.id)) topic.vocab.push(v); });
+      for (const vocab of newVocab) {
+        const vocData = await Database.vocab.create(vocab.topic_id, vocab.pt, vocab.en);
+        if (vocData && !topic.vocab.find(x => x.id === vocData.id)) {
+          topic.vocab.push(vocData);
+        }
       }
     }
   } catch (dbError) {
