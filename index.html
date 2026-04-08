@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Português — Learning Journal</title>
-<!-- VERSION: v10.3.4 | Build: 2026-03-26 | HOTFIX: Fixed saveTopic error handling -->
+<!-- VERSION: v10.3.5 | Build: 2026-03-26 | HOTFIX: Added explanations.getByTopicId + fixed currentTopic() calls -->
 <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;1,400&family=Geist+Mono:wght@300;400;500&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <style>
@@ -1006,7 +1006,7 @@ main{padding:2.5rem 3rem;max-width:760px;}
 // ══════════════════════════════════════════════════════
 // VERSION INFO
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v10.3.4';
+const APP_VERSION = 'v10.3.5';
 const BUILD_DATE = '2026-03-26';
 console.log(`%c🇵🇹 Portuguese Learning Journal ${APP_VERSION}`, 'font-weight: bold; font-size: 14px; color: #2a6b3f;');
 console.log(`Build: ${BUILD_DATE} | REFACTORED: Modular architecture`);
@@ -1656,6 +1656,16 @@ const Database = (() => {
   
   // Explanations operations
   const explanations = {
+    async getByTopicId(topicId) {
+      const result = await query('explanations', q => 
+        q.select('*')
+         .eq('topic_id', topicId)
+         .maybeSingle(),
+        { op: 'get explanation by topic', silent: true }
+      );
+      return result;
+    },
+    
     async deleteAllForTopic(topicId) {
       return query('explanations', q => 
         q.delete().eq('topic_id', topicId),
@@ -4380,18 +4390,16 @@ async function loadCachedExplanation() {
   const area = document.getElementById('overview-area');
   
   // Check if explanation is cached
-  const { data: cached, error } = await Database.explanations.getByTopicId(currentTopicId, currentUser.id);
+  const cached = await Database.explanations.getByTopicId(currentTopicId);
   
-  if (error) {
-    console.error('❌ Error loading cached explanation:', error);
-    // Show generate button if error or no cache
+  if (!cached || !cached.text) {
+    // Show generate button if no cache
     area.innerHTML = `<button class="btn" onclick="generateTopicOverview()">📖 Generate Topic Overview</button>`;
     return;
   }
   
-  if (cached && cached.text) {
-    try {
-      const explainData = JSON.parse(cached.text);
+  try {
+    const explainData = JSON.parse(cached.text);
       
       // Build HTML from structured data (same rendering as in explainThenGenerate)
       let html = `<div data-explanation style="border:1px solid var(--line);padding:1.25rem 1.5rem;background:var(--white);margin-bottom:1.25rem;">
@@ -4464,15 +4472,6 @@ async function loadCachedExplanation() {
         <div style="font-size:15px;color:var(--ink2);line-height:1.75;white-space:pre-line;">${cached.text}</div>
       </div>`;
     }
-  }
-  
-  // If no cached explanation, show button to generate it
-  if (!cached || !cached.text) {
-    area.innerHTML = `<div style="text-align:center;padding:2rem;border:1px dashed var(--line);background:var(--white);margin-bottom:1.25rem;">
-      <div style="font-size:15px;color:var(--ink3);margin-bottom:1rem;font-style:italic;">No topic overview yet</div>
-      <button class="btn" onclick="generateTopicOverview()">Generate topic overview</button>
-    </div>`;
-  }
 }
 
 
@@ -4743,7 +4742,11 @@ async function removeVocab(id) {
   renderTopicDetail();
 }
 
-function renderVocab() { TopicDetailController.renderVocabList(currentTopic()); }
+function renderVocab() { 
+  const topic = getTopic(currentTopicId);
+  if (!topic) return;
+  TopicDetailController.renderVocabList(topic); 
+}
 
 // ══════════════════════════════════════════════════════
 // GLOBAL VOCABULARY
@@ -4913,7 +4916,11 @@ async function toggleErrorFixed(id, currentFixed) {
   renderTopicDetail();
 }
 
-function renderErrors() { TopicDetailController.renderErrorsList(currentTopic()); }
+function renderErrors() { 
+  const topic = getTopic(currentTopicId);
+  if (!topic) return;
+  TopicDetailController.renderErrorsList(topic); 
+}
 
 // ══════════════════════════════════════════════════════
 // TOPIC PROMPT
