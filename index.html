@@ -3455,9 +3455,9 @@ const TopicDetailController = (() => {
     }
     
     el.innerHTML = topic.vocab.map(v => `
-      <div class="vocab-item">
+      <div class="vocab-row">
         <div class="vocab-pt">${v.pt}</div>
-        <div class="vocab-en">${v.en}</div>
+        <div class="vocab-ru">${v.en}</div>
         <button class="vocab-del" onclick="deleteVocabWord(${v.id})" title="Delete">×</button>
       </div>
     `).join('');
