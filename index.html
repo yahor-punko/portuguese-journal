@@ -3607,7 +3607,7 @@ const AdminViewController = (() => {
     const { data: prompts, error } = await sb
       .from('topic_prompts')
       .select('*')
-      .order('category, name', { ascending: true });
+      .order('category, prompt_name', { ascending: true });
     
     if (error) {
       console.error('Error loading topic prompts:', error);
@@ -3639,7 +3639,7 @@ const AdminViewController = (() => {
     const { data: prompts, error } = await sb
       .from('exam_prompts')
       .select('*')
-      .order('exam_key', { ascending: true });
+      .order('unit_key', { ascending: true });
     
     if (error) {
       console.error('Error loading exam prompts:', error);
