@@ -183,10 +183,12 @@ main{padding:2.5rem 3rem;max-width:760px;}
 .result-banner.fail{background:var(--red-bg);border-color:var(--red-line);color:var(--red);}
 
 /* ── VOCAB ── */
-.vocab-row{display:flex;align-items:baseline;gap:12px;padding:.7rem 0;border-bottom:1px solid var(--line);}
+.vocab-row{display:flex;align-items:baseline;gap:10px;padding:.7rem 0;border-bottom:1px solid var(--line);}
 .vocab-row:first-child{border-top:1px solid var(--line);}
-.vocab-pt{font-size:16px;min-width:160px;}
+.vocab-pt{font-size:16px;flex:1;}
 .vocab-ru{font-size:15px;color:var(--ink3);flex:1;}
+.vocab-del{margin-left:auto;background:none;border:none;color:var(--ink4);cursor:pointer;font-size:20px;padding:0 8px;line-height:1;}
+.vocab-del:hover{color:var(--red);}
 .vocab-when{font-family:'Geist Mono',monospace;font-size:10px;color:var(--ink4);}
 
 /* ── ERRORS ── */
