@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Português — Learning Journal</title>
-<!-- VERSION: v10.3.6 | Build: 2026-03-26 | HOTFIX: Fixed addVocab field IDs (vadd-ru → vadd-en) -->
+<!-- VERSION: v10.3.7 | Build: 2026-03-26 | HOTFIX: Added user_id to vocab/exercises/errors create() methods (RLS fix) -->
 <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;1,400&family=Geist+Mono:wght@300;400;500&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <style>
@@ -1006,7 +1006,7 @@ main{padding:2.5rem 3rem;max-width:760px;}
 // ══════════════════════════════════════════════════════
 // VERSION INFO
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v10.3.6';
+const APP_VERSION = 'v10.3.7';
 const BUILD_DATE = '2026-03-26';
 console.log(`%c🇵🇹 Portuguese Learning Journal ${APP_VERSION}`, 'font-weight: bold; font-size: 14px; color: #2a6b3f;');
 console.log(`Build: ${BUILD_DATE} | REFACTORED: Modular architecture`);
@@ -1547,8 +1547,20 @@ const Database = (() => {
     },
     
     async create(topicId, errorCount) {
+      // Get user_id from topic
+      const topicResult = await query('topics', q => 
+        q.select('user_id').eq('id', topicId).single(),
+        { op: 'get topic user_id', silent: true }
+      );
+      
+      if (!topicResult) return null;
+      
       return query('exercises', q => 
-        q.insert({ topic_id: topicId, error_count: errorCount }).select().single(),
+        q.insert({ 
+          topic_id: topicId, 
+          user_id: topicResult.user_id,
+          error_count: errorCount 
+        }).select().single(),
         { op: 'create exercise' }
       );
     },
@@ -1585,8 +1597,24 @@ const Database = (() => {
     },
     
     async create(topicId, pt, en) {
+      // Get user_id from topic
+      const topicResult = await query('topics', q => 
+        q.select('user_id').eq('id', topicId).single(),
+        { op: 'get topic user_id', silent: true }
+      );
+      
+      if (!topicResult) {
+        console.error('Topic not found for vocab creation');
+        return null;
+      }
+      
       return query('vocab', q => 
-        q.insert({ topic_id: topicId, pt, en }).select().single(),
+        q.insert({ 
+          topic_id: topicId, 
+          user_id: topicResult.user_id,
+          pt, 
+          en 
+        }).select().single(),
         { op: 'create vocab' }
       );
     },
@@ -1623,9 +1651,18 @@ const Database = (() => {
     },
     
     async create(topicId, text, explanation, grammarCategory) {
+      // Get user_id from topic
+      const topicResult = await query('topics', q => 
+        q.select('user_id').eq('id', topicId).single(),
+        { op: 'get topic user_id', silent: true }
+      );
+      
+      if (!topicResult) return null;
+      
       return query('errors', q => 
         q.insert({
           topic_id: topicId,
+          user_id: topicResult.user_id,
           text,
           explanation,
           grammar_category: grammarCategory
