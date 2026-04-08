@@ -1628,6 +1628,13 @@ const Database = (() => {
       );
     },
     
+    async delete(id) {
+      return query('vocab', q => 
+        q.delete().eq('id', id),
+        { op: 'delete vocab by id' }
+      );
+    },
+    
     async deleteAllForTopic(topicId) {
       return query('vocab', q => 
         q.delete().eq('topic_id', topicId),
