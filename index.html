@@ -4280,8 +4280,7 @@ async function loadTopicPrompts() {
   const { data: prompts, error } = await sb
     .from('topic_prompts')
     .select('*')
-    .order('category', { ascending: true })
-    .order('prompt_name', { ascending: true });
+    .order('category, prompt_name', { ascending: true });
   
   if (error) {
     console.error('Error loading topic prompts:', error);
