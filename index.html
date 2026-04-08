@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Português — Learning Journal</title>
-<!-- VERSION: v10.3.2 | Build: 2026-03-26 | HOTFIX: Added Database.*.getAll() methods + fixed addVocab() -->
+<!-- VERSION: v10.3.4 | Build: 2026-03-26 | HOTFIX: Fixed saveTopic error handling -->
 <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;1,400&family=Geist+Mono:wght@300;400;500&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <style>
@@ -1006,7 +1006,7 @@ main{padding:2.5rem 3rem;max-width:760px;}
 // ══════════════════════════════════════════════════════
 // VERSION INFO
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v10.3.2';
+const APP_VERSION = 'v10.3.4';
 const BUILD_DATE = '2026-03-26';
 console.log(`%c🇵🇹 Portuguese Learning Journal ${APP_VERSION}`, 'font-weight: bold; font-size: 14px; color: #2a6b3f;');
 console.log(`Build: ${BUILD_DATE} | REFACTORED: Modular architecture`);
@@ -1558,6 +1558,18 @@ const Database = (() => {
         q.select('*').eq('topic_id', topicId).order('created_at', { ascending: false }),
         { op: 'get exercises for topic' }
       );
+    },
+    
+    async deleteAllForTopic(topicId) {
+      return query('exercises', q => 
+        q.delete().eq('topic_id', topicId),
+        { op: 'delete exercises for topic' }
+      );
+    },
+    
+    // Alias for backward compatibility
+    deleteByTopicId(topicId) {
+      return this.deleteAllForTopic(topicId);
     }
   };
   
@@ -1591,6 +1603,11 @@ const Database = (() => {
         q.delete().eq('topic_id', topicId),
         { op: 'delete vocab for topic' }
       );
+    },
+    
+    // Alias for backward compatibility
+    deleteByTopicId(topicId) {
+      return this.deleteAllForTopic(topicId);
     }
   };
   
@@ -1629,6 +1646,26 @@ const Database = (() => {
         q.delete().eq('topic_id', topicId),
         { op: 'delete errors for topic' }
       );
+    },
+    
+    // Alias for backward compatibility
+    deleteByTopicId(topicId) {
+      return this.deleteAllForTopic(topicId);
+    }
+  };
+  
+  // Explanations operations
+  const explanations = {
+    async deleteAllForTopic(topicId) {
+      return query('explanations', q => 
+        q.delete().eq('topic_id', topicId),
+        { op: 'delete explanations for topic' }
+      );
+    },
+    
+    // Alias for backward compatibility
+    deleteByTopicId(topicId) {
+      return this.deleteAllForTopic(topicId);
     }
   };
   
@@ -1695,6 +1732,7 @@ const Database = (() => {
     exercises,
     vocab,
     errors,
+    explanations,
     admin,
     system
   };
@@ -4618,10 +4656,10 @@ async function saveTopic() {
   
   if (editingTopicId) {
     console.log('Updating existing topic...');
-    const { error } = await Database.topics.update(editingTopicId, payload, currentUser.id);
-    if (error) { 
-      console.error('❌ Update error:', error);
-      toast('Error: ' + error.message); 
+    const data = await Database.topics.update(editingTopicId, payload);
+    if (!data) { 
+      console.error('❌ Update error');
+      toast('Error updating topic'); 
       return; 
     }
     console.log('✓ Topic updated');
@@ -4631,9 +4669,9 @@ async function saveTopic() {
   } else {
     console.log('Inserting new topic...');
     const data = await Database.topics.create(payload);
-    if (error) { 
-      console.error('❌ Insert error:', error);
-      toast('Error: ' + error.message); 
+    if (!data) { 
+      console.error('❌ Insert error');
+      toast('Error creating topic'); 
       return; 
     }
     console.log('✓ Topic inserted:', data);
