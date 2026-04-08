@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Português — Learning Journal</title>
-<!-- VERSION: v10.3.5 | Build: 2026-03-26 | HOTFIX: Added explanations.getByTopicId + fixed currentTopic() calls -->
+<!-- VERSION: v10.3.6 | Build: 2026-03-26 | HOTFIX: Fixed addVocab field IDs (vadd-ru → vadd-en) -->
 <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;1,400&family=Geist+Mono:wght@300;400;500&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <style>
@@ -1006,7 +1006,7 @@ main{padding:2.5rem 3rem;max-width:760px;}
 // ══════════════════════════════════════════════════════
 // VERSION INFO
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v10.3.5';
+const APP_VERSION = 'v10.3.6';
 const BUILD_DATE = '2026-03-26';
 console.log(`%c🇵🇹 Portuguese Learning Journal ${APP_VERSION}`, 'font-weight: bold; font-size: 14px; color: #2a6b3f;');
 console.log(`Build: ${BUILD_DATE} | REFACTORED: Modular architecture`);
@@ -4720,7 +4720,7 @@ async function deleteTopic(topicId, topicName) {
 // ══════════════════════════════════════════════════════
 async function addVocab() {
   const pt = document.getElementById('vadd-pt').value.trim();
-  const en = document.getElementById('vadd-ru').value.trim();
+  const en = document.getElementById('vadd-en').value.trim();
   if (!pt) { toast('Portuguese word required'); return; }
   const t = getTopic(currentTopicId);
   if (!t) return;
@@ -4729,7 +4729,7 @@ async function addVocab() {
   if (!data) { toast('Error adding vocab'); return; }
   t.vocab.push(data);
   document.getElementById('vadd-pt').value = '';
-  document.getElementById('vadd-ru').value = '';
+  document.getElementById('vadd-en').value = '';
   renderVocab();
   renderTopicDetail();
 }
