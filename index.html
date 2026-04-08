@@ -3625,11 +3625,11 @@ const AdminViewController = (() => {
     tbody.innerHTML = prompts.map(p => `
       <tr>
         <td>${p.category || 'General'}</td>
-        <td><strong>${p.name}</strong></td>
+        <td><strong>${p.prompt_name}</strong></td>
         <td style="max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${p.content.substring(0, 100)}...</td>
         <td>
           <button class="admin-btn-sm" onclick="editTopicPrompt(${p.id})">Edit</button>
-          <button class="admin-btn-sm danger" onclick="deleteTopicPrompt(${p.id}, '${p.name.replace(/'/g, "\'")}')">Delete</button>
+          <button class="admin-btn-sm danger" onclick="deleteTopicPrompt(${p.id}, '${p.prompt_name.replace(/'/g, "\'")}')">Delete</button>
         </td>
       </tr>
     `).join('');
@@ -3656,11 +3656,11 @@ const AdminViewController = (() => {
     
     tbody.innerHTML = prompts.map(p => `
       <tr>
-        <td><strong>${p.exam_key}</strong></td>
+        <td><strong>${p.unit_key}</strong></td>
         <td style="max-width:400px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${p.content.substring(0, 150)}...</td>
         <td>
           <button class="admin-btn-sm" onclick="editExamPrompt(${p.id})">Edit</button>
-          <button class="admin-btn-sm danger" onclick="deleteExamPrompt(${p.id}, '${p.exam_key.replace(/'/g, "\'")}')">Delete</button>
+          <button class="admin-btn-sm danger" onclick="deleteExamPrompt(${p.id}, '${p.unit_key.replace(/'/g, "\'")}')">Delete</button>
         </td>
       </tr>
     `).join('');
