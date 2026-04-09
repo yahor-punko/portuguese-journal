@@ -5,8 +5,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Português — Learning Journal</title>
 <!--
-  VERSION: v10.4.5 | Build: 2026-04-09
+  VERSION: v10.4.9 | Build: 2026-04-09
   CHANGELOG:
+    v10.4.9 — Errors tab: filter pills by grammar_category, auto-reset on topic switch
+    v10.4.8 — Global Review: spaced repetition across all topics, sidebar button with due count badge
+    v10.4.7 — Topic scoring: best-attempt logic (min error_count) instead of average; 1 perfect run = 100%
+    v10.4.6 — Database abstraction: topicPrompts, examPrompts, finalExams modules; zero direct sb calls for these tables
     v10.4.5 — Progress sparkline (Canvas 2D) in topic header, last 10 sessions, color-coded trend
     v10.4.4 — Web Speech API: 🔊 on vocab rows, exercise questions, review flashcard (auto-speak on card show)
     v10.4.3 — Spaced repetition: Review tab with SM-2 flashcard (Again/Good/Easy), Database.vocab.updateReview()
@@ -567,6 +571,7 @@ main{padding:2.5rem 3rem;max-width:760px;}
     <div style="display:flex;flex-direction:column;gap:2px;">
       <button class="foot-btn active" id="fn-home" onclick="showHome()">≡ All topics</button>
       <button class="foot-btn" id="fn-vocab" onclick="showVocabulary()">📚 Vocabulary</button>
+      <button class="foot-btn" id="fn-review" onclick="showGlobalReview()">🔁 Review <span id="global-review-badge" style="font-size:10px;color:var(--blue);"></span></button>
       <button class="foot-btn" id="fn-settings" onclick="showSettings()">⚙ Settings</button>
       <button class="foot-btn" id="fn-admin" onclick="showAdmin()" style="display:none;">👑 Admin</button>
     </div>
@@ -628,6 +633,7 @@ main{padding:2.5rem 3rem;max-width:760px;}
     </div>
 
     <div id="tab-errors" class="tab-panel">
+      <div id="errors-category-filters" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:1rem;"></div>
       <div id="errors-list"></div>
     </div>
 
@@ -687,6 +693,15 @@ main{padding:2.5rem 3rem;max-width:760px;}
     </div>
     
     <div id="global-vocab-list"></div>
+  </div>
+
+  <!-- GLOBAL REVIEW -->
+  <div id="view-review" class="view">
+    <div class="view-head">
+      <h1>Review</h1>
+      <p>Spaced repetition across all topics · <span id="global-review-due-label" class="sync-indicator"></span></p>
+    </div>
+    <div id="global-review-area"></div>
   </div>
 
   <!-- SETTINGS -->
@@ -1079,7 +1094,7 @@ main{padding:2.5rem 3rem;max-width:760px;}
 // ══════════════════════════════════════════════════════
 // VERSION INFO
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v10.4.5';
+const APP_VERSION = 'v10.4.9';
 const BUILD_DATE = '2026-04-09';
 const CHANGELOG = [
   'v10.4.5 — Progress sparkline (Canvas 2D) in topic header, color-coded trend',
@@ -1860,6 +1875,133 @@ const Database = (() => {
     }
   };
   
+  // Topic prompts operations (admin-managed, no user_id)
+  const topicPrompts = {
+    async getAll() {
+      return query('topic_prompts', q =>
+        q.select('*').order('category, prompt_name', {}),
+        { op: 'getAll topic_prompts' }
+      );
+    },
+
+    async getById(id) {
+      return query('topic_prompts', q =>
+        q.select('*').eq('id', id).single(),
+        { op: 'getById topic_prompt' }
+      );
+    },
+
+    async create(data) {
+      return query('topic_prompts', q =>
+        q.insert(data).select().single(),
+        { op: 'create topic_prompt' }
+      );
+    },
+
+    async update(id, data) {
+      return query('topic_prompts', q =>
+        q.update({ ...data, updated_at: new Date().toISOString() }).eq('id', id),
+        { op: 'update topic_prompt' }
+      );
+    },
+
+    async delete(id) {
+      return query('topic_prompts', q =>
+        q.delete().eq('id', id),
+        { op: 'delete topic_prompt' }
+      );
+    }
+  };
+
+  // Exam prompts operations (admin-managed, no user_id)
+  const examPrompts = {
+    async getAll() {
+      return query('exam_prompts', q =>
+        q.select('*').eq('is_active', true).order('unit_key', {}),
+        { op: 'getAll exam_prompts (active)' }
+      );
+    },
+
+    async getAllForAdmin() {
+      return query('exam_prompts', q =>
+        q.select('*').order('unit_key', {}),
+        { op: 'getAllForAdmin exam_prompts' }
+      );
+    },
+
+    async getById(id) {
+      return query('exam_prompts', q =>
+        q.select('*').eq('id', id).single(),
+        { op: 'getById exam_prompt' }
+      );
+    },
+
+    async create(data) {
+      return query('exam_prompts', q =>
+        q.insert(data).select().single(),
+        { op: 'create exam_prompt' }
+      );
+    },
+
+    async update(id, data) {
+      return query('exam_prompts', q =>
+        q.update({ ...data, updated_at: new Date().toISOString() }).eq('id', id),
+        { op: 'update exam_prompt' }
+      );
+    },
+
+    async delete(id) {
+      return query('exam_prompts', q =>
+        q.delete().eq('id', id),
+        { op: 'delete exam_prompt' }
+      );
+    }
+  };
+
+  // Final exams operations
+  const finalExams = {
+    async getAll(userId) {
+      return query('final_exams', q =>
+        q.select('*').eq('user_id', userId),
+        { op: 'getAll final_exams' }
+      );
+    },
+
+    async create(userId, unitName, unitKey, questions) {
+      return query('final_exams', q =>
+        q.insert({
+          user_id: userId,
+          unit_name: unitName,
+          unit_key: unitKey,
+          questions,
+          best_score: 0,
+          attempts: 0
+        }).select().single(),
+        { op: 'create final_exam' }
+      );
+    },
+
+    async update(id, data) {
+      return query('final_exams', q =>
+        q.update(data).eq('id', id),
+        { op: 'update final_exam' }
+      );
+    },
+
+    async saveAttempt(examId, userId, answers, score) {
+      return query('final_exam_attempts', q =>
+        q.insert({
+          exam_id: examId,
+          user_id: userId,
+          answers,
+          score,
+          completed_at: new Date().toISOString()
+        }),
+        { op: 'save final_exam_attempt' }
+      );
+    }
+  };
+
   // Public API
   return {
     query,
@@ -1869,7 +2011,10 @@ const Database = (() => {
     errors,
     explanations,
     admin,
-    system
+    system,
+    topicPrompts,
+    examPrompts,
+    finalExams
   };
 })();
 
@@ -2291,19 +2436,14 @@ const Utils = (() => {
    */
   function calculateProgress(exercises) {
     if (!exercises || !exercises.length) return 0;
-    
+
     const { ZERO_ERRORS, ONE_ERROR, TWO_ERRORS, THREE_PLUS_ERRORS } = CONFIG.PROGRESS.SCORE_WEIGHTS;
-    
-    let totalScore = 0;
-    exercises.forEach(ex => {
-      const errors = ex.error_count || 0;
-      if (errors === 0) totalScore += ZERO_ERRORS;
-      else if (errors === 1) totalScore += ONE_ERROR;
-      else if (errors === 2) totalScore += TWO_ERRORS;
-      else totalScore += THREE_PLUS_ERRORS;
-    });
-    
-    return Math.round(totalScore / exercises.length);
+
+    const best = Math.min(...exercises.map(e => e.error_count || 0));
+    if (best === 0) return ZERO_ERRORS;
+    if (best === 1) return ONE_ERROR;
+    if (best === 2) return TWO_ERRORS;
+    return THREE_PLUS_ERRORS;
   }
   
   /**
@@ -3036,33 +3176,18 @@ const ExamSystem = (() => {
       }
       
       // Save to database
-      const { data: examData, error } = await sb
-        .from('final_exams')
-        .insert({
-          user_id: currentUser.id,
-          unit_name: unitName,
-          unit_key: unitKey,
-          questions: response.items,
-          best_score: 0,
-          attempts: 0
-        })
-        .select()
-        .single();
-      
-      if (error) {
-        return ErrorHandler.handle(error, {
-          module: 'ExamSystem',
-          operation: 'save exam',
-          message: 'Error saving exam'
-        });
-      }
-      
+      const examData = await Database.finalExams.create(
+        currentUser.id, unitName, unitKey, response.items
+      );
+
+      if (!examData) return null;
+
       // Add to cache
       finalExams.push(examData);
-      
+
       toast(`Final exam generated: ${response.items.length} questions`);
       return examData;
-      
+
     } catch (err) {
       return ErrorHandler.handle(err, {
         module: 'ExamSystem',
@@ -3212,30 +3337,15 @@ Return ONLY valid JSON:
       updateData.best_score = score;
     }
     
-    try {
-      const { error } = await sb
-        .from('final_exams')
-        .update(updateData)
-        .eq('id', examId);
-      
-      if (error) throw error;
-      
-      // Update cache
-      currentExam.attempts = updateData.attempts;
-      currentExam.last_attempt_at = updateData.last_attempt_at;
-      if (updateData.best_score) {
-        currentExam.best_score = updateData.best_score;
-      }
-      
-      return true;
-      
-    } catch (err) {
-      return ErrorHandler.handle(err, {
-        module: 'ExamSystem',
-        operation: 'save attempt',
-        silent: false
-      });
-    }
+    const ok = await Database.finalExams.update(examId, updateData);
+    if (ok === null) return false;
+
+    // Update cache
+    currentExam.attempts = updateData.attempts;
+    currentExam.last_attempt_at = updateData.last_attempt_at;
+    if (updateData.best_score) currentExam.best_score = updateData.best_score;
+
+    return true;
   }
   
   // Public API
@@ -3336,31 +3446,18 @@ const AdminPanel = (() => {
    * @returns {Promise<Object|null>} Created prompt or null
    */
   async function createTopicPrompt(topicName, category, content) {
-    try {
-      const { data, error } = await sb
-        .from('topic_prompts')
-        .insert({
-          topic_name: topicName,
-          category,
-          prompt_content: content
-        })
-        .select()
-        .single();
-      
-      if (error) throw error;
-      
+    const data = await Database.topicPrompts.create({
+      topic_name: topicName,
+      category,
+      prompt_content: content
+    });
+    if (data) {
       topicPrompts.push(data);
       toast(CONFIG.MESSAGES.SUCCESS_SAVED);
-      return data;
-      
-    } catch (err) {
-      return ErrorHandler.handle(err, {
-        module: 'AdminPanel',
-        operation: 'create topic prompt'
-      });
     }
+    return data;
   }
-  
+
   /**
    * Update topic prompt
    * @param {string} id - Prompt ID
@@ -3368,63 +3465,30 @@ const AdminPanel = (() => {
    * @returns {Promise<boolean>} Success status
    */
   async function updateTopicPrompt(id, updates) {
-    try {
-      const { error } = await sb
-        .from('topic_prompts')
-        .update({
-          ...updates,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', id);
-      
-      if (error) throw error;
-      
-      // Update cache
+    const result = await Database.topicPrompts.update(id, updates);
+    if (result !== null) {
       const prompt = topicPrompts.find(p => p.id === id);
-      if (prompt) {
-        Object.assign(prompt, updates);
-      }
-      
+      if (prompt) Object.assign(prompt, updates);
       toast(CONFIG.MESSAGES.SUCCESS_SAVED);
       return true;
-      
-    } catch (err) {
-      return ErrorHandler.handle(err, {
-        module: 'AdminPanel',
-        operation: 'update topic prompt'
-      });
     }
+    return false;
   }
-  
+
   /**
    * Delete topic prompt
    * @param {string} id - Prompt ID
    * @returns {Promise<boolean>} Success status
    */
   async function deleteTopicPrompt(id) {
-    try {
-      const { error } = await sb
-        .from('topic_prompts')
-        .delete()
-        .eq('id', id);
-      
-      if (error) throw error;
-      
-      // Remove from cache
+    const result = await Database.topicPrompts.delete(id);
+    if (result !== null) {
       const index = topicPrompts.findIndex(p => p.id === id);
-      if (index !== -1) {
-        topicPrompts.splice(index, 1);
-      }
-      
+      if (index !== -1) topicPrompts.splice(index, 1);
       toast('Deleted successfully');
       return true;
-      
-    } catch (err) {
-      return ErrorHandler.handle(err, {
-        module: 'AdminPanel',
-        operation: 'delete topic prompt'
-      });
     }
+    return false;
   }
   
   // Public API
@@ -3553,14 +3617,40 @@ const TopicDetailController = (() => {
   
   function renderErrorsList(topic) {
     const el = document.getElementById('errors-list');
+    const filtersEl = document.getElementById('errors-category-filters');
     const unfixed = (topic.errors || []).filter(e => !e.fixed);
-    
+
     if (!unfixed.length) {
+      if (filtersEl) filtersEl.innerHTML = '';
       el.innerHTML = '<div class="empty">✓ No active errors. Great work!</div>';
       return;
     }
-    
-    el.innerHTML = unfixed.map(e => {
+
+    // Build category filter pills
+    if (filtersEl) {
+      const cats = [...new Set(unfixed.map(e => e.grammar_category || 'General'))].sort();
+      const active = window._errorCategoryFilter;
+      filtersEl.innerHTML = [
+        `<button class="btn btn-ghost btn-sm${!active ? ' active' : ''}" onclick="setErrorCategoryFilter(null)" style="${!active ? 'border-color:var(--ink2);color:var(--ink);' : ''}">All (${unfixed.length})</button>`,
+        ...cats.map(cat => {
+          const count = unfixed.filter(e => (e.grammar_category || 'General') === cat).length;
+          const isActive = active === cat;
+          return `<button class="btn btn-ghost btn-sm${isActive ? ' active' : ''}" onclick="setErrorCategoryFilter('${cat.replace(/'/g, "\\'")}')" style="${isActive ? 'border-color:var(--ink2);color:var(--ink);' : ''}">${cat} (${count})</button>`;
+        })
+      ].join('');
+    }
+
+    // Apply filter
+    const filtered = window._errorCategoryFilter
+      ? unfixed.filter(e => (e.grammar_category || 'General') === window._errorCategoryFilter)
+      : unfixed;
+
+    if (!filtered.length) {
+      el.innerHTML = '<div class="empty">No errors in this category.</div>';
+      return;
+    }
+
+    el.innerHTML = filtered.map(e => {
       // Parse text field: "given → should be: correct (Q: question)"
       let question = 'N/A';
       let userAnswer = 'N/A';
@@ -3701,15 +3791,12 @@ const AdminViewController = (() => {
   
   async function renderTopicPrompts() {
     console.log('[AdminPanel] renderTopicPrompts called');
-    const { data: prompts, error } = await sb
-      .from('topic_prompts')
-      .select('*')
-      .order('category, prompt_name', { ascending: true });
-    
-    console.log('[AdminPanel] Topic prompts response:', { prompts, error });
-    
-    if (error) {
-      console.error('Error loading topic prompts:', error);
+    const prompts = await Database.topicPrompts.getAll();
+
+    console.log('[AdminPanel] Topic prompts response:', { prompts });
+
+    if (!prompts) {
+      console.error('Error loading topic prompts');
       return;
     }
     
@@ -3760,13 +3847,10 @@ const AdminViewController = (() => {
   }
   
   async function renderExamPrompts() {
-    const { data: prompts, error } = await sb
-      .from('exam_prompts')
-      .select('*')
-      .order('unit_key', { ascending: true });
-    
-    if (error) {
-      console.error('Error loading exam prompts:', error);
+    const prompts = await Database.examPrompts.getAllForAdmin();
+
+    if (!prompts) {
+      console.error('Error loading exam prompts');
       return;
     }
     
@@ -4379,47 +4463,19 @@ async function loadGlobalApiKey() {
  * Load topic prompts from database
  */
 async function loadTopicPrompts() {
-  const { data: prompts, error } = await sb
-    .from('topic_prompts')
-    .select('*')
-    .order('category, prompt_name', { ascending: true });
-  
-  if (error) {
-    console.error('Error loading topic prompts:', error);
-    return;
-  }
-  
+  const prompts = await Database.topicPrompts.getAll();
   topicPrompts = prompts || [];
   console.log('Topic prompts loaded:', topicPrompts.length);
 }
 
 async function loadExamPrompts() {
-  const { data: prompts, error } = await sb
-    .from('exam_prompts')
-    .select('*')
-    .eq('is_active', true)
-    .order('unit_key', { ascending: true });
-  
-  if (error) {
-    console.error('Error loading exam prompts:', error);
-    return;
-  }
-  
+  const prompts = await Database.examPrompts.getAll();
   examPrompts = prompts || [];
   console.log('Exam prompts loaded:', examPrompts.length);
 }
 
 async function loadFinalExams() {
-  const { data: exams, error } = await sb
-    .from('final_exams')
-    .select('*')
-    .eq('user_id', currentUser.id);
-  
-  if (error) {
-    console.error('Error loading final exams:', error);
-    return;
-  }
-  
+  const exams = await Database.finalExams.getAll(currentUser.id);
   finalExams = exams || [];
   console.log('Final exams loaded:', finalExams.length);
 }
@@ -4451,6 +4507,7 @@ async function loadAllData() {
     
     console.log('✓ Topics assembled:', topics.length);
 
+    updateGlobalReviewBadge();
     setSyncStatus('synced');
   } catch(e) {
     setSyncStatus('sync error');
@@ -4630,18 +4687,13 @@ function getTopic(id) { return topics.find(t => t.id === id); }
 function computeProgress(t) {
   const exs = t.exercises || [];
   if (!exs.length) return 0;
-  
-  // Оцениваем каждое упражнение по шкале:
-  // 0 ошибок = 100%, 1 ошибка = 85%, 2 = 70%, 3+ = 50%
-  let totalScore = 0;
-  exs.forEach(ex => {
-    if (ex.error_count === 0) totalScore += 100;
-    else if (ex.error_count === 1) totalScore += 85;
-    else if (ex.error_count === 2) totalScore += 70;
-    else totalScore += 50;
-  });
-  
-  return Math.round(totalScore / exs.length);
+
+  // Лучший результат по всем попыткам
+  const best = Math.min(...exs.map(e => e.error_count || 0));
+  if (best === 0) return 100;
+  if (best === 1) return 85;
+  if (best === 2) return 70;
+  return 50;
 }
 
 // ══════════════════════════════════════════════════════
@@ -5049,6 +5101,114 @@ async function submitReview(id, intervalDays) {
 }
 
 // ══════════════════════════════════════════════════════
+// GLOBAL REVIEW
+// ══════════════════════════════════════════════════════
+
+let _globalReviewQueue = [];
+let _globalReviewIndex = 0;
+
+function showGlobalReview() {
+  showView('review');
+  document.getElementById('fn-review').classList.add('active');
+  renderGlobalReview();
+}
+
+function renderGlobalReview() {
+  const el = document.getElementById('global-review-area');
+  if (!el) return;
+
+  // Collect all due vocab from all topics, sorted by next_review_at (nulls first)
+  _globalReviewQueue = topics
+    .flatMap(t => (t.vocab || []).map(v => ({ ...v, _topicName: t.name })))
+    .filter(_isDue)
+    .sort((a, b) => {
+      if (!a.next_review_at) return -1;
+      if (!b.next_review_at) return 1;
+      return new Date(a.next_review_at) - new Date(b.next_review_at);
+    });
+  _globalReviewIndex = 0;
+
+  const badge = document.getElementById('global-review-badge');
+  const dueLabel = document.getElementById('global-review-due-label');
+  const count = _globalReviewQueue.length;
+
+  if (badge) badge.textContent = count ? `(${count})` : '';
+  if (dueLabel) dueLabel.textContent = count ? `${count} words due` : 'all caught up';
+
+  if (!count) {
+    el.innerHTML = '<div class="review-empty">No words due for review. Come back later!</div>';
+    return;
+  }
+
+  _showGlobalReviewCard(el);
+  speak(_globalReviewQueue[0]?.pt || '');
+}
+
+function _showGlobalReviewCard(el) {
+  if (_globalReviewIndex >= _globalReviewQueue.length) {
+    el.innerHTML = '<div class="review-empty">Session complete! All due words reviewed.</div>';
+    const badge = document.getElementById('global-review-badge');
+    if (badge) badge.textContent = '';
+    return;
+  }
+
+  const v = _globalReviewQueue[_globalReviewIndex];
+  const progress = `${_globalReviewIndex + 1} / ${_globalReviewQueue.length}`;
+  const interval = v.interval_days || 1;
+
+  el.innerHTML = `
+    <div class="review-progress">${progress}</div>
+    <div class="review-card" id="global-review-card">
+      <div style="font-size:11px;color:var(--ink3);font-family:'Geist Mono',monospace;margin-bottom:0.75rem;">${v._topicName}</div>
+      <div class="review-card-word">${v.pt} <button class="speak-btn" onclick="speak('${v.pt.replace(/'/g, "\\'")}')" title="Pronounce" style="font-size:18px;">🔊</button></div>
+      <div class="review-card-hint">tap to reveal</div>
+      <div class="review-card-answer" id="global-review-answer"></div>
+      <button class="review-card-reveal" id="global-review-reveal-btn" onclick="revealGlobalReviewCard()">Reveal</button>
+      <div class="review-rating" id="global-review-rating" style="display:none;">
+        <button onclick="submitGlobalReview(${v.id}, 1)" style="color:var(--red);">Again<br><span style="font-size:10px;opacity:.6;">1 day</span></button>
+        <button onclick="submitGlobalReview(${v.id}, ${Math.max(3, interval * 2)})">Good<br><span style="font-size:10px;opacity:.6;">${Math.max(3, interval * 2)} days</span></button>
+        <button onclick="submitGlobalReview(${v.id}, ${Math.max(7, interval * 3)})" style="color:var(--green);">Easy<br><span style="font-size:10px;opacity:.6;">${Math.max(7, interval * 3)} days</span></button>
+      </div>
+    </div>
+  `;
+}
+
+function revealGlobalReviewCard() {
+  const v = _globalReviewQueue[_globalReviewIndex];
+  document.getElementById('global-review-answer').textContent = v.en;
+  document.getElementById('global-review-reveal-btn').style.display = 'none';
+  document.getElementById('global-review-rating').style.display = 'flex';
+}
+
+async function submitGlobalReview(id, intervalDays) {
+  await Database.vocab.updateReview(id, intervalDays);
+
+  // Update cache across all topics
+  for (const t of topics) {
+    const v = t.vocab?.find(v => v.id === id);
+    if (v) {
+      v.interval_days = intervalDays;
+      v.next_review_at = new Date(Date.now() + intervalDays * 86400000).toISOString();
+      break;
+    }
+  }
+
+  _globalReviewIndex++;
+  const next = _globalReviewQueue[_globalReviewIndex];
+  _showGlobalReviewCard(document.getElementById('global-review-area'));
+  if (next) speak(next.pt);
+}
+
+// Update global review badge after data loads
+function updateGlobalReviewBadge() {
+  const count = topics
+    .flatMap(t => t.vocab || [])
+    .filter(_isDue).length;
+  const badge = document.getElementById('global-review-badge');
+  if (badge) badge.textContent = count ? `(${count})` : '';
+}
+
+// ══════════════════════════════════════════════════════
 // GLOBAL VOCABULARY
 // ══════════════════════════════════════════════════════
 let currentVocabFilter = null; // null = show all
@@ -5216,10 +5376,17 @@ async function toggleErrorFixed(id, currentFixed) {
   renderTopicDetail();
 }
 
-function renderErrors() { 
+window._errorCategoryFilter = null;
+
+function setErrorCategoryFilter(cat) {
+  window._errorCategoryFilter = cat;
+  renderErrors();
+}
+
+function renderErrors() {
   const topic = getTopic(currentTopicId);
   if (!topic) return;
-  TopicDetailController.renderErrorsList(topic); 
+  TopicDetailController.renderErrorsList(topic);
 }
 
 // ══════════════════════════════════════════════════════
@@ -5473,56 +5640,34 @@ function openAddTopicPrompt() {
  * Edit existing topic prompt
  */
 async function editTopicPrompt(id) {
-  try {
-    const { data, error } = await sb
-      .from('topic_prompts')
-      .select('*')
-      .eq('id', id)
-      .single();
-    
-    if (error) throw error;
-    
-    currentEditingPromptId = id;
-    document.getElementById('modal-topic-prompt-title').textContent = 'Edit Topic Prompt';
-    document.getElementById('mtp-name').value = data.prompt_name;
-    document.getElementById('mtp-category').value = data.category || 'custom';
-    document.getElementById('mtp-description').value = data.description || '';
-    document.getElementById('mtp-content').value = data.prompt_content;
-    document.getElementById('mtp-default').checked = data.is_default || false;
-    document.getElementById('modal-topic-prompt').classList.add('open');
-    
-  } catch (err) {
-    console.error('Error loading prompt:', err);
-    alert('Error loading prompt. Check console.');
-  }
+  const data = await Database.topicPrompts.getById(id);
+  if (!data) { alert('Error loading prompt. Check console.'); return; }
+
+  currentEditingPromptId = id;
+  document.getElementById('modal-topic-prompt-title').textContent = 'Edit Topic Prompt';
+  document.getElementById('mtp-name').value = data.prompt_name;
+  document.getElementById('mtp-category').value = data.category || 'custom';
+  document.getElementById('mtp-description').value = data.description || '';
+  document.getElementById('mtp-content').value = data.prompt_content;
+  document.getElementById('mtp-default').checked = data.is_default || false;
+  document.getElementById('modal-topic-prompt').classList.add('open');
 }
 
 /**
  * Duplicate topic prompt
  */
 async function duplicateTopicPrompt(id) {
-  try {
-    const { data, error } = await sb
-      .from('topic_prompts')
-      .select('*')
-      .eq('id', id)
-      .single();
-    
-    if (error) throw error;
-    
-    currentEditingPromptId = null;
-    document.getElementById('modal-topic-prompt-title').textContent = 'Duplicate Topic Prompt';
-    document.getElementById('mtp-name').value = data.prompt_name + ' (copy)';
-    document.getElementById('mtp-category').value = data.category || 'custom';
-    document.getElementById('mtp-description').value = data.description || '';
-    document.getElementById('mtp-content').value = data.prompt_content;
-    document.getElementById('mtp-default').checked = false; // Don't copy default flag
-    document.getElementById('modal-topic-prompt').classList.add('open');
-    
-  } catch (err) {
-    console.error('Error duplicating prompt:', err);
-    alert('Error duplicating prompt. Check console.');
-  }
+  const data = await Database.topicPrompts.getById(id);
+  if (!data) { alert('Error duplicating prompt. Check console.'); return; }
+
+  currentEditingPromptId = null;
+  document.getElementById('modal-topic-prompt-title').textContent = 'Duplicate Topic Prompt';
+  document.getElementById('mtp-name').value = data.prompt_name + ' (copy)';
+  document.getElementById('mtp-category').value = data.category || 'custom';
+  document.getElementById('mtp-description').value = data.description || '';
+  document.getElementById('mtp-content').value = data.prompt_content;
+  document.getElementById('mtp-default').checked = false;
+  document.getElementById('modal-topic-prompt').classList.add('open');
 }
 
 /**
@@ -5545,81 +5690,47 @@ async function saveTopicPrompt() {
     return;
   }
   
-  try {
-    const promptData = {
-      prompt_name: name,
-      category: category,
-      description: description || null,
-      prompt_content: content,
-      is_default: isDefault,
-      updated_at: new Date().toISOString()
-    };
-    
-    if (currentEditingPromptId) {
-      // Update existing prompt
-      const { error } = await sb
-        .from('topic_prompts')
-        .update(promptData)
-        .eq('id', currentEditingPromptId);
-      
-      if (error) throw error;
-      
-      console.log('Topic prompt updated:', currentEditingPromptId);
-    } else {
-      // Create new prompt
-      promptData.created_by = sb.auth.getUser().then(u => u.data.user?.id);
-      
-      const { error } = await sb
-        .from('topic_prompts')
-        .insert(promptData);
-      
-      if (error) throw error;
-      
-      console.log('Topic prompt created');
-    }
-    
-    closeTopicPromptModal();
-    
-    // Reload prompts in both admin panel and main dropdown
-    await loadTopicPrompts();
-    await renderTopicPromptsAdmin();
-    
-    alert(currentEditingPromptId ? 'Prompt updated successfully!' : 'Prompt created successfully!');
-    
-  } catch (err) {
-    console.error('Error saving topic prompt:', err);
-    alert('Error saving prompt: ' + err.message);
+  const promptData = {
+    prompt_name: name,
+    category,
+    description: description || null,
+    prompt_content: content,
+    is_default: isDefault
+  };
+
+  let ok;
+  if (currentEditingPromptId) {
+    ok = await Database.topicPrompts.update(currentEditingPromptId, promptData);
+    console.log('Topic prompt updated:', currentEditingPromptId);
+  } else {
+    ok = await Database.topicPrompts.create(promptData);
+    console.log('Topic prompt created');
   }
+
+  if (ok === null) {
+    alert('Error saving prompt. Check console.');
+    return;
+  }
+
+  closeTopicPromptModal();
+  await loadTopicPrompts();
+  await renderTopicPromptsAdmin();
+  alert(currentEditingPromptId ? 'Prompt updated successfully!' : 'Prompt created successfully!');
 }
 
 /**
  * Delete topic prompt
  */
 async function deleteTopicPrompt(id, name) {
-  if (!confirm(`Delete prompt "${name}"?\n\nThis cannot be undone.`)) {
-    return;
-  }
-  
-  try {
-    const { error } = await sb
-      .from('topic_prompts')
-      .delete()
-      .eq('id', id);
-    
-    if (error) throw error;
-    
-    console.log('Topic prompt deleted:', id);
-    
-    // Reload prompts in both admin panel and main dropdown
-    await loadTopicPrompts();
-    await renderTopicPromptsAdmin();
-    
-    alert('Prompt deleted successfully!');
-    
-  } catch (err) {
-    console.error('Error deleting topic prompt:', err);
-    alert('Error deleting prompt: ' + err.message);
-  }
+  if (!confirm(`Delete prompt "${name}"?\n\nThis cannot be undone.`)) return;
+
+  const ok = await Database.topicPrompts.delete(id);
+  if (ok === null) { alert('Error deleting prompt. Check console.'); return; }
+
+  console.log('Topic prompt deleted:', id);
+  await loadTopicPrompts();
+  await renderTopicPromptsAdmin();
+  alert('Prompt deleted successfully!');
 }
 
 /**
@@ -5699,27 +5810,16 @@ function openAddExamPrompt() {
  * Edit existing exam prompt
  */
 async function editExamPrompt(id) {
-  try {
-    const { data, error } = await sb
-      .from('exam_prompts')
-      .select('*')
-      .eq('id', id)
-      .single();
-    
-    if (error) throw error;
-    
-    currentEditingExamPromptId = id;
-    document.getElementById('modal-exam-prompt-title').textContent = 'Edit Exam Prompt';
-    document.getElementById('mep-unit').value = data.unit_key;
-    document.getElementById('mep-description').value = data.description || '';
-    document.getElementById('mep-content').value = data.prompt_content;
-    document.getElementById('mep-active').checked = data.is_active;
-    document.getElementById('modal-exam-prompt').classList.add('open');
-    
-  } catch (err) {
-    console.error('Error loading exam prompt:', err);
-    alert('Error loading prompt. Check console.');
-  }
+  const data = await Database.examPrompts.getById(id);
+  if (!data) { alert('Error loading prompt. Check console.'); return; }
+
+  currentEditingExamPromptId = id;
+  document.getElementById('modal-exam-prompt-title').textContent = 'Edit Exam Prompt';
+  document.getElementById('mep-unit').value = data.unit_key;
+  document.getElementById('mep-description').value = data.description || '';
+  document.getElementById('mep-content').value = data.prompt_content;
+  document.getElementById('mep-active').checked = data.is_active;
+  document.getElementById('modal-exam-prompt').classList.add('open');
 }
 
 /**
@@ -5740,79 +5840,44 @@ async function saveExamPrompt() {
   const unitNumber = unitKey.replace('unit', '');
   const unitName = `Unidade ${unitNumber}`;
   
-  try {
-    const promptData = {
-      unit_key: unitKey,
-      unit_name: unitName,
-      prompt_content: content,
-      description: description || null,
-      is_active: isActive,
-      updated_at: new Date().toISOString()
-    };
-    
-    if (currentEditingExamPromptId) {
-      // Update existing prompt
-      const { error } = await sb
-        .from('exam_prompts')
-        .update(promptData)
-        .eq('id', currentEditingExamPromptId);
-      
-      if (error) throw error;
-      
-      console.log('Exam prompt updated:', currentEditingExamPromptId);
-    } else {
-      // Create new prompt
-      const { error } = await sb
-        .from('exam_prompts')
-        .insert(promptData);
-      
-      if (error) throw error;
-      
-      console.log('Exam prompt created');
-    }
-    
-    closeExamPromptModal();
-    
-    // Reload prompts
-    await loadExamPrompts();
-    await renderExamPromptsAdmin();
-    
-    alert(currentEditingExamPromptId ? 'Exam prompt updated!' : 'Exam prompt created!');
-    
-  } catch (err) {
-    console.error('Error saving exam prompt:', err);
-    alert('Error saving prompt: ' + err.message);
+  const promptData = {
+    unit_key: unitKey,
+    unit_name: unitName,
+    prompt_content: content,
+    description: description || null,
+    is_active: isActive
+  };
+
+  let ok;
+  if (currentEditingExamPromptId) {
+    ok = await Database.examPrompts.update(currentEditingExamPromptId, promptData);
+    console.log('Exam prompt updated:', currentEditingExamPromptId);
+  } else {
+    ok = await Database.examPrompts.create(promptData);
+    console.log('Exam prompt created');
   }
+
+  if (ok === null) { alert('Error saving prompt. Check console.'); return; }
+
+  closeExamPromptModal();
+  await loadExamPrompts();
+  await renderExamPromptsAdmin();
+  alert(currentEditingExamPromptId ? 'Exam prompt updated!' : 'Exam prompt created!');
 }
 
 /**
  * Delete exam prompt
  */
 async function deleteExamPrompt(id, unitName) {
-  if (!confirm(`Delete exam prompt for "${unitName}"?\n\nThis cannot be undone.`)) {
-    return;
-  }
-  
-  try {
-    const { error } = await sb
-      .from('exam_prompts')
-      .delete()
-      .eq('id', id);
-    
-    if (error) throw error;
-    
-    console.log('Exam prompt deleted:', id);
-    
-    // Reload prompts
-    await loadExamPrompts();
-    await renderExamPromptsAdmin();
-    
-    alert('Exam prompt deleted!');
-    
-  } catch (err) {
-    console.error('Error deleting exam prompt:', err);
-    alert('Error deleting prompt: ' + err.message);
-  }
+  if (!confirm(`Delete exam prompt for "${unitName}"?\n\nThis cannot be undone.`)) return;
+
+  const ok = await Database.examPrompts.delete(id);
+  if (ok === null) { alert('Error deleting prompt. Check console.'); return; }
+
+  console.log('Exam prompt deleted:', id);
+  await loadExamPrompts();
+  await renderExamPromptsAdmin();
+  alert('Exam prompt deleted!');
 }
 
 /**
@@ -6738,6 +6803,7 @@ async function showAdmin() {
 
 function showTopicDetail(topicId) {
   currentTopicId = topicId;
+  window._errorCategoryFilter = null;
   currentExercise = null; currentAnswers = {}; graded = false;
   document.getElementById('exercise-area').innerHTML = '';
   document.getElementById('gen-status').textContent = '';
@@ -6884,28 +6950,18 @@ async function generateFinalExam(unitNumber, unitTopics) {
     }
     
     // Save to database
-    const { data: examData, error } = await sb
-      .from('final_exams')
-      .insert({
-        user_id: currentUser.id,
-        unit_name: unitName,
-        unit_key: unitKey,
-        questions: response.items,
-        best_score: 0,
-        attempts: 0
-      })
-      .select()
-      .single();
-    
-    if (error) {
-      console.error('Error saving final exam:', error);
+    const examData = await Database.finalExams.create(
+      currentUser.id, unitName, unitKey, response.items
+    );
+
+    if (!examData) {
       toast('Error saving exam');
       return null;
     }
-    
+
     // Add to local cache
     finalExams.push(examData);
-    
+
     toast(`Final exam generated: ${response.items.length} questions`);
     return examData;
     
@@ -7247,30 +7303,9 @@ async function saveFinalExamAttempt(examId, results) {
     updateData.best_score = score;
   }
   
-  const { error: updateError } = await sb
-    .from('final_exams')
-    .update(updateData)
-    .eq('id', examId);
-  
-  if (updateError) {
-    console.error('Error updating exam:', updateError);
-  }
-  
-  // Insert attempt record
-  const { error: insertError } = await sb
-    .from('final_exam_attempts')
-    .insert({
-      exam_id: examId,
-      user_id: currentUser.id,
-      answers: results.results,
-      score: score,
-      completed_at: new Date().toISOString()
-    });
-  
-  if (insertError) {
-    console.error('Error saving attempt:', insertError);
-  }
-  
+  await Database.finalExams.update(examId, updateData);
+  await Database.finalExams.saveAttempt(examId, currentUser.id, results.results, score);
+
   // Update local cache
   const examIndex = finalExams.findIndex(e => e.id === examId);
   if (examIndex !== -1) {
