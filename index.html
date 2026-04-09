@@ -4731,7 +4731,9 @@ function drawSparkline(exercises) {
   }
 
   const last = data[data.length - 1];
-  label.textContent = `${last} error${last !== 1 ? 's' : ''} · last ${data.length} session${data.length !== 1 ? 's' : ''}`;
+  const trendArrow = trend < 0 ? '↓ improving' : trend > 0 ? '↑ worsening' : '→ stable';
+  label.textContent = `${trendArrow} · ${last} error${last !== 1 ? 's' : ''} in last session · ${data.length} total`;
+  canvas.title = `Error count per exercise session (last ${data.length}).\nLower = better.\nGreen = improving, red = worsening, grey = stable.`;
 }
 
 // ══════════════════════════════════════════════════════
