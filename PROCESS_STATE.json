@@ -1,0 +1,10 @@
+{
+  "initiative": "Porto Phase 2 — stabilise and extend Portuguese Learning Journal",
+  "stage": "execution",
+  "active_slice": "T-001",
+  "stage_owner": "main_agent",
+  "blocker": null,
+  "open_questions": [],
+  "next_action": "Start T-001: audit portuguese_journal_v10_3_7_FINAL.html for bare legacy function calls, replace with module-prefixed versions, validate syntax.",
+  "last_updated": "2026-04-09"
+}

@@ -1,0 +1,14 @@
+# OS
+.DS_Store
+
+# Working / scratch files
+*.tmp
+/tmp/
+
+# Old session docs (kept locally, not needed in repo)
+SESSION_DUMP_*.md
+QUICK_REFERENCE.md
+CLAUDE_CODE_SETUP.md
+
+# Keep the named HTML working file out of repo (index.html is the deployed artifact)
+portuguese_journal_v10_3_7_FINAL.html

@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Português — Learning Journal</title>
-<!-- VERSION: v10.3.7 | Build: 2026-03-26 | HOTFIX: Added user_id to vocab/exercises/errors create() methods (RLS fix) -->
+<!-- VERSION: v10.4.1 | Build: 2026-04-09 | T-002: Remove deleteByTopicId aliases, callers updated to deleteAllForTopic -->
 <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;1,400&family=Geist+Mono:wght@300;400;500&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <style>
@@ -1023,7 +1023,7 @@ main{padding:2.5rem 3rem;max-width:760px;}
 // ══════════════════════════════════════════════════════
 // VERSION INFO
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v10.3.7';
+const APP_VERSION = 'v10.4.1';
 const BUILD_DATE = '2026-03-26';
 console.log(`%c🇵🇹 Portuguese Learning Journal ${APP_VERSION}`, 'font-weight: bold; font-size: 14px; color: #2a6b3f;');
 console.log(`Build: ${BUILD_DATE} | REFACTORED: Modular architecture`);
@@ -1590,15 +1590,10 @@ const Database = (() => {
     },
     
     async deleteAllForTopic(topicId) {
-      return query('exercises', q => 
+      return query('exercises', q =>
         q.delete().eq('topic_id', topicId),
         { op: 'delete exercises for topic' }
       );
-    },
-    
-    // Alias for backward compatibility
-    deleteByTopicId(topicId) {
-      return this.deleteAllForTopic(topicId);
     }
   };
   
@@ -1651,15 +1646,10 @@ const Database = (() => {
     },
     
     async deleteAllForTopic(topicId) {
-      return query('vocab', q => 
+      return query('vocab', q =>
         q.delete().eq('topic_id', topicId),
         { op: 'delete vocab for topic' }
       );
-    },
-    
-    // Alias for backward compatibility
-    deleteByTopicId(topicId) {
-      return this.deleteAllForTopic(topicId);
     }
   };
   
@@ -1703,15 +1693,10 @@ const Database = (() => {
     },
     
     async deleteAllForTopic(topicId) {
-      return query('errors', q => 
+      return query('errors', q =>
         q.delete().eq('topic_id', topicId),
         { op: 'delete errors for topic' }
       );
-    },
-    
-    // Alias for backward compatibility
-    deleteByTopicId(topicId) {
-      return this.deleteAllForTopic(topicId);
     }
   };
   
@@ -1735,15 +1720,10 @@ const Database = (() => {
     },
     
     async deleteAllForTopic(topicId) {
-      return query('explanations', q => 
+      return query('explanations', q =>
         q.delete().eq('topic_id', topicId),
         { op: 'delete explanations for topic' }
       );
-    },
-    
-    // Alias for backward compatibility
-    deleteByTopicId(topicId) {
-      return this.deleteAllForTopic(topicId);
     }
   };
   
@@ -4175,13 +4155,7 @@ async function onLogin(user) {
     document.body.appendChild(loadingOverlay);
   
   // Check admin status
-  const { data: adminCheck } = await sb
-    .from('admins')
-    .select('id')
-    .eq('user_id', user.id)
-    .maybeSingle();
-  
-  isAdmin = !!adminCheck;
+  isAdmin = await Database.admin.isAdmin(user.id);
   console.log('Admin status:', isAdmin);
   
   // Show/hide admin button
@@ -4307,40 +4281,14 @@ async function doLogout() {
  * Load system prompts from database
  */
 async function loadSystemPrompts() {
-  const { data: prompts, error } = await sb
-    .from('system_prompts')
-    .select('*');
-  
-  if (error) {
-    console.error('Error loading system prompts:', error);
-    return;
-  }
-  
-  systemPrompts = {};
-  prompts?.forEach(p => {
-    systemPrompts[p.prompt_type] = p;
-  });
-  
-  console.log('System prompts loaded:', Object.keys(systemPrompts));
+  await AdminPanel.loadSystemPrompts();
 }
 
 /**
  * Load global API key
  */
 async function loadGlobalApiKey() {
-  const { data, error } = await sb
-    .from('system_settings')
-    .select('setting_value')
-    .eq('setting_key', 'global_api_key')
-    .maybeSingle();
-  
-  if (error) {
-    console.error('Error loading global API key:', error);
-    return;
-  }
-  
-  globalApiKey = data?.setting_value || null;
-  console.log('Global API key loaded:', globalApiKey ? 'Yes' : 'No');
+  await AdminPanel.loadGlobalApiKey();
 }
 
 /**
@@ -4805,10 +4753,10 @@ async function deleteTopic(topicId, topicName) {
   
   try {
     // Delete from Supabase
-    await Database.exercises.deleteByTopicId(topicId, currentUser.id);
-    await Database.vocab.deleteByTopicId(topicId, currentUser.id);
-    await Database.errors.deleteByTopicId(topicId, currentUser.id);
-    await Database.explanations.deleteByTopicId(topicId, currentUser.id);
+    await Database.exercises.deleteAllForTopic(topicId);
+    await Database.vocab.deleteAllForTopic(topicId);
+    await Database.errors.deleteAllForTopic(topicId);
+    await Database.explanations.deleteAllForTopic(topicId);
     await Database.topics.delete(topicId, currentUser.id);
     
     // Remove from local state

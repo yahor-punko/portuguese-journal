@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd -- "$(dirname -- "$0")" && pwd)"
+
+if [[ "${1-}" == "--snapshot" ]]; then
+  shift
+  node "$SCRIPT_DIR/mavp-operator-snapshot.js" "$@"
+elif [[ "${1-}" == "--agent" ]]; then
+  shift
+  node "$SCRIPT_DIR/mavp-operator-agent.js" "$@"
+else
+  node "$SCRIPT_DIR/mavp-operator-dashboard.js" "$@"
+fi
