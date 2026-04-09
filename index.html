@@ -1073,9 +1073,20 @@ main{padding:2.5rem 3rem;max-width:760px;}
 // VERSION INFO
 // ══════════════════════════════════════════════════════
 const APP_VERSION = 'v10.4.4';
-const BUILD_DATE = '2026-03-26';
+const BUILD_DATE = '2026-04-09';
+const CHANGELOG = [
+  'v10.4.4 — Web Speech API: 🔊 vocab, exercises, review flashcard',
+  'v10.4.3 — Spaced repetition: Review tab, SM-2 flashcard, updateReview()',
+  'v10.4.2 — Admin Panel: inline edit for prompt_content',
+  'v10.4.1 — Remove deleteByTopicId aliases, fix caller signatures',
+  'v10.4.0 — Legacy sb calls → module methods (admin, loadSystemPrompts, loadGlobalApiKey)',
+  'v10.3.7 — 22 bugs fixed: RLS, vocab layout, column names, query syntax',
+];
 console.log(`%c🇵🇹 Portuguese Learning Journal ${APP_VERSION}`, 'font-weight: bold; font-size: 14px; color: #2a6b3f;');
-console.log(`Build: ${BUILD_DATE} | REFACTORED: Modular architecture`);
+console.log(`Build: ${BUILD_DATE}`);
+console.groupCollapsed('Changelog');
+CHANGELOG.forEach(line => console.log(line));
+console.groupEnd();
 
 // ══════════════════════════════════════════════════════
 // CONFIGURATION & CONSTANTS
