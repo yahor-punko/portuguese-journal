@@ -183,10 +183,11 @@ main{padding:2.5rem 3rem;max-width:760px;}
 .result-banner.fail{background:var(--red-bg);border-color:var(--red-line);color:var(--red);}
 
 /* ── VOCAB ── */
-.vocab-row{display:flex;align-items:baseline;gap:12px;padding:.7rem 0;border-bottom:1px solid var(--line);}
-.vocab-row:first-child{border-top:1px solid var(--line);}
-.vocab-pt{font-size:16px;min-width:160px;}
+.vocab-row{display:flex;align-items:center;gap:12px;padding:.7rem 0;border-bottom:1px solid var(--line);}
+.vocab-pt{font-size:16px;flex:1;}
 .vocab-ru{font-size:15px;color:var(--ink3);flex:1;}
+.vocab-del{background:none;border:none;color:var(--ink4);cursor:pointer;font-size:18px;padding:0 4px;line-height:1;transition:color 0.15s;}
+.vocab-del:hover{color:var(--red);}
 .vocab-when{font-family:'Geist Mono',monospace;font-size:10px;color:var(--ink4);}
 
 /* ── ERRORS ── */
@@ -199,6 +200,22 @@ main{padding:2.5rem 3rem;max-width:760px;}
 .error-text.done{text-decoration:line-through;color:var(--ink3);}
 .error-explanation{font-size:13px;color:var(--ink2);margin-top:4px;line-height:1.5;font-style:italic;}
 .error-meta{font-family:'Geist Mono',monospace;font-size:10px;color:var(--ink4);margin-top:3px;}
+
+/* Error Card (new structure) */
+.error-card{border:1px solid var(--line);border-radius:6px;padding:1rem;margin-bottom:1rem;background:var(--white);}
+.err-row{display:flex;gap:12px;margin-bottom:0.75rem;}
+.err-label{font-family:'Geist Mono',monospace;font-size:11px;color:var(--ink3);min-width:100px;text-transform:uppercase;letter-spacing:0.05em;}
+.err-val{font-size:15px;color:var(--ink2);flex:1;}
+.err-wrong{color:var(--red);}
+.err-right{color:var(--green);}
+.err-explain{font-size:14px;color:var(--ink2);line-height:1.6;padding:0.75rem;background:var(--bg);border-radius:4px;margin-bottom:0.75rem;font-style:italic;}
+.err-actions{display:flex;gap:8px;}
+.err-btn{font-size:13px;padding:6px 12px;border:1px solid var(--line);background:var(--bg);color:var(--ink2);border-radius:4px;cursor:pointer;transition:all 0.15s;font-family:'Geist Mono',monospace;}
+.err-btn:hover{background:var(--ink);color:var(--white);border-color:var(--ink);}
+.err-btn.fix{color:var(--green);border-color:var(--green);}
+.err-btn.fix:hover{background:var(--green);color:var(--white);}
+.err-btn.unfix{color:var(--ink3);}
+.err-btn.unfix:hover{background:var(--ink3);color:var(--white);}
 
 /* ── SETTINGS ── */
 .settings-section{margin-bottom:2rem;padding-bottom:2rem;border-bottom:1px solid var(--line);}
@@ -3487,6 +3504,23 @@ const TopicDetailController = (() => {
     }
     
     el.innerHTML = unfixed.map(e => {
+      // Parse text field: "given → should be: correct (Q: question)"
+      let question = 'N/A';
+      let userAnswer = 'N/A';
+      let correctAnswer = 'N/A';
+      
+      if (e.text) {
+        const qMatch = e.text.match(/\(Q: (.+)\)$/);
+        if (qMatch) question = qMatch[1];
+        
+        const parts = e.text.split(' → should be: ');
+        if (parts.length === 2) {
+          userAnswer = parts[0];
+          const correctPart = parts[1].split(' (Q: ')[0];
+          correctAnswer = correctPart;
+        }
+      }
+      
       const explanationHTML = e.explanation ? 
         `<div class="err-explain">${e.explanation}</div>` : '';
       
@@ -3494,15 +3528,15 @@ const TopicDetailController = (() => {
         <div class="error-card">
           <div class="err-row">
             <div class="err-label">Question:</div>
-            <div class="err-val">${e.question}</div>
+            <div class="err-val">${question}</div>
           </div>
           <div class="err-row">
             <div class="err-label">Your answer:</div>
-            <div class="err-val err-wrong">${e.user_answer}</div>
+            <div class="err-val err-wrong">${userAnswer}</div>
           </div>
           <div class="err-row">
             <div class="err-label">Correct:</div>
-            <div class="err-val err-right">${e.correct_answer}</div>
+            <div class="err-val err-right">${correctAnswer}</div>
           </div>
           ${explanationHTML}
           <div class="err-actions">
