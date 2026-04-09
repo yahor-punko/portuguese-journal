@@ -5,8 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Português — Learning Journal</title>
 <!--
-  VERSION: v10.4.3 | Build: 2026-04-09
+  VERSION: v10.4.4 | Build: 2026-04-09
   CHANGELOG:
+    v10.4.4 — Web Speech API: 🔊 on vocab rows, exercise questions, review flashcard (auto-speak on card show)
     v10.4.3 — Spaced repetition: Review tab with SM-2 flashcard (Again/Good/Easy), Database.vocab.updateReview()
     v10.4.2 — Admin Panel: inline edit for prompt_content (no modal)
     v10.4.1 — Remove deleteByTopicId aliases, fix caller signatures
@@ -196,6 +197,8 @@ main{padding:2.5rem 3rem;max-width:760px;}
 .vocab-ru{font-size:15px;color:var(--ink3);flex:1;}
 .vocab-del{background:none;border:none;color:var(--ink4);cursor:pointer;font-size:18px;padding:0 4px;line-height:1;transition:color 0.15s;}
 .vocab-del:hover{color:var(--red);}
+.speak-btn{background:none;border:none;cursor:pointer;font-size:14px;padding:0 4px;opacity:.4;transition:opacity .15s;line-height:1;vertical-align:middle;}
+.speak-btn:hover{opacity:1;}
 .review-card{border:1px solid var(--line);border-radius:8px;padding:2rem;text-align:center;max-width:480px;margin:0 auto;}
 .review-card-word{font-family:'EB Garamond',serif;font-size:2.2rem;color:var(--ink);margin-bottom:0.5rem;}
 .review-card-hint{font-size:12px;color:var(--ink3);font-family:'Geist Mono',monospace;margin-bottom:1.5rem;}
@@ -1069,7 +1072,7 @@ main{padding:2.5rem 3rem;max-width:760px;}
 // ══════════════════════════════════════════════════════
 // VERSION INFO
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v10.4.3';
+const APP_VERSION = 'v10.4.4';
 const BUILD_DATE = '2026-03-26';
 console.log(`%c🇵🇹 Portuguese Learning Journal ${APP_VERSION}`, 'font-weight: bold; font-size: 14px; color: #2a6b3f;');
 console.log(`Build: ${BUILD_DATE} | REFACTORED: Modular architecture`);
@@ -3522,7 +3525,7 @@ const TopicDetailController = (() => {
     
     el.innerHTML = topic.vocab.map(v => `
       <div class="vocab-row">
-        <div class="vocab-pt">${v.pt}</div>
+        <div class="vocab-pt">${v.pt} <button class="speak-btn" onclick="speak(this.closest('.vocab-row').querySelector('.vocab-pt').firstChild.textContent.trim())" title="Pronounce">🔊</button></div>
         <div class="vocab-ru">${v.en}</div>
         <button class="vocab-del" onclick="removeVocab(${v.id})" title="Delete">×</button>
       </div>
@@ -4873,6 +4876,17 @@ function renderVocab() {
   TopicDetailController.renderVocabList(topic);
 }
 
+// ── Web Speech API ─────────────────────────────────────
+
+function speak(text) {
+  if (!window.speechSynthesis) return;
+  window.speechSynthesis.cancel();
+  const utt = new SpeechSynthesisUtterance(text);
+  utt.lang = 'pt-PT';
+  utt.rate = 0.85;
+  window.speechSynthesis.speak(utt);
+}
+
 // ── Spaced Repetition ──────────────────────────────────
 
 let _reviewQueue = [];
@@ -4900,6 +4914,7 @@ function renderReview() {
   }
 
   _showReviewCard(el);
+  speak(_reviewQueue[0]?.pt || '');
 }
 
 function _showReviewCard(el) {
@@ -4916,7 +4931,7 @@ function _showReviewCard(el) {
   el.innerHTML = `
     <div class="review-progress">${progress}</div>
     <div class="review-card" id="review-card">
-      <div class="review-card-word">${v.pt}</div>
+      <div class="review-card-word">${v.pt} <button class="speak-btn" onclick="speak('${v.pt.replace(/'/g, "\\'")}')" title="Pronounce" style="font-size:18px;">🔊</button></div>
       <div class="review-card-hint">tap to reveal</div>
       <div class="review-card-answer" id="review-answer"></div>
       <button class="review-card-reveal" id="review-reveal-btn" onclick="revealReviewCard()">Reveal</button>
@@ -4949,7 +4964,9 @@ async function submitReview(id, intervalDays) {
   }
 
   _reviewIndex++;
+  const next = _reviewQueue[_reviewIndex];
   _showReviewCard(document.getElementById('review-area'));
+  if (next) speak(next.pt);
 }
 
 // ══════════════════════════════════════════════════════
@@ -6238,7 +6255,7 @@ function renderExercise() {
   const items = currentExercise.items || [];
   let html = `<div class="exercise-box"><div class="ex-instructions">${currentExercise.instructions||''}</div>`;
   items.forEach((item, i) => {
-    html += `<div class="ex-item" id="exitem-${i}"><div class="ex-q">${i+1}. ${item.question}</div>`;
+    html += `<div class="ex-item" id="exitem-${i}"><div class="ex-q">${i+1}. ${item.question} <button class="speak-btn" onclick="speak(currentExercise.items[${i}].question)" title="Pronounce">🔊</button></div>`;
     if (item.type === 'choice' && item.options) {
       html += `<div style="display:flex;flex-direction:column;gap:4px;margin-top:6px;">`;
       item.options.forEach(opt => {
