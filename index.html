@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Português — Learning Journal</title>
-<!-- VERSION: v10.4.1 | Build: 2026-04-09 | T-002: Remove deleteByTopicId aliases, callers updated to deleteAllForTopic -->
+<!-- VERSION: v10.4.2 | Build: 2026-04-09 | T-003: Admin Panel inline edit for prompt_content -->
 <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;1,400&family=Geist+Mono:wght@300;400;500&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <style>
@@ -353,6 +353,28 @@ main{padding:2.5rem 3rem;max-width:760px;}
 .topic-prompt-card-actions button {
   font-size: 13px;
   padding: 6px 12px;
+}
+.tpc-edit-form {
+  margin-top: 0.5rem;
+}
+.tpc-textarea {
+  width: 100%;
+  min-height: 160px;
+  padding: 0.5rem;
+  font-size: 13px;
+  font-family: 'Geist Mono', monospace;
+  line-height: 1.6;
+  border: 1px solid var(--blue);
+  border-radius: 4px;
+  background: var(--white);
+  color: var(--ink);
+  resize: vertical;
+  box-sizing: border-box;
+}
+.tpc-edit-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 0.5rem;
 }
 .badge-default {
   display: inline-block;
@@ -1023,7 +1045,7 @@ main{padding:2.5rem 3rem;max-width:760px;}
 // ══════════════════════════════════════════════════════
 // VERSION INFO
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v10.4.1';
+const APP_VERSION = 'v10.4.2';
 const BUILD_DATE = '2026-03-26';
 console.log(`%c🇵🇹 Portuguese Learning Journal ${APP_VERSION}`, 'font-weight: bold; font-size: 14px; color: #2a6b3f;');
 console.log(`Build: ${BUILD_DATE} | REFACTORED: Modular architecture`);
@@ -3650,7 +3672,7 @@ const AdminViewController = (() => {
     }
     
     container.innerHTML = prompts.map(p => `
-      <div class="topic-prompt-card">
+      <div class="topic-prompt-card" id="tpc-card-${p.id}" data-content="${(p.prompt_content || '').replace(/"/g, '&quot;').replace(/`/g, '&#96;')}">
         <div class="topic-prompt-card-header">
           <div>
             <div class="topic-prompt-card-title">
@@ -3663,11 +3685,18 @@ const AdminViewController = (() => {
             </div>
           </div>
         </div>
-        <div class="topic-prompt-card-content">${p.prompt_content || 'No content'}</div>
-        <div class="topic-prompt-card-actions">
-          <button class="btn secondary" onclick="editTopicPrompt(${p.id})">Edit</button>
+        <div class="topic-prompt-card-content" id="tpc-display-${p.id}">${p.prompt_content || 'No content'}</div>
+        <div class="topic-prompt-card-actions" id="tpc-actions-${p.id}">
+          <button class="btn secondary" onclick="startEditPromptContent(${p.id})">Edit</button>
           <button class="btn secondary" onclick="duplicateTopicPrompt(${p.id})" title="Duplicate this prompt">Duplicate</button>
           <button class="btn secondary" style="color:var(--red);" onclick="deleteTopicPrompt(${p.id}, '${(p.prompt_name || '').replace(/'/g, "\\'")}')">Delete</button>
+        </div>
+        <div class="tpc-edit-form" id="tpc-edit-${p.id}" style="display:none;">
+          <textarea class="tpc-textarea" id="tpc-ta-${p.id}"></textarea>
+          <div class="tpc-edit-actions">
+            <button class="btn" onclick="savePromptContent(${p.id})">Save</button>
+            <button class="btn secondary" onclick="cancelEditPromptContent(${p.id})">Cancel</button>
+          </div>
         </div>
       </div>
     `).join('');
@@ -5390,6 +5419,47 @@ async function deleteTopicPrompt(id, name) {
 function closeTopicPromptModal() {
   document.getElementById('modal-topic-prompt').classList.remove('open');
   currentEditingPromptId = null;
+}
+
+function startEditPromptContent(id) {
+  const card = document.getElementById('tpc-card-' + id);
+  const content = card.dataset.content.replace(/&#96;/g, '`');
+  const ta = document.getElementById('tpc-ta-' + id);
+  ta.value = content;
+  document.getElementById('tpc-display-' + id).style.display = 'none';
+  document.getElementById('tpc-actions-' + id).style.display = 'none';
+  document.getElementById('tpc-edit-' + id).style.display = 'block';
+  ta.focus();
+}
+
+function cancelEditPromptContent(id) {
+  document.getElementById('tpc-display-' + id).style.display = '';
+  document.getElementById('tpc-actions-' + id).style.display = '';
+  document.getElementById('tpc-edit-' + id).style.display = 'none';
+}
+
+async function savePromptContent(id) {
+  const ta = document.getElementById('tpc-ta-' + id);
+  const newContent = ta.value.trim();
+  if (!newContent) { toast('Content cannot be empty'); return; }
+
+  const saveBtn = document.querySelector('#tpc-edit-' + id + ' .btn:not(.secondary)');
+  saveBtn.textContent = 'Saving…';
+  saveBtn.disabled = true;
+
+  const success = await AdminPanel.updateTopicPrompt(id, { prompt_content: newContent });
+
+  if (success !== false && success !== null) {
+    const displayEl = document.getElementById('tpc-display-' + id);
+    displayEl.textContent = newContent;
+    const card = document.getElementById('tpc-card-' + id);
+    card.dataset.content = newContent.replace(/"/g, '&quot;').replace(/`/g, '&#96;');
+    cancelEditPromptContent(id);
+  } else {
+    saveBtn.textContent = 'Save';
+    saveBtn.disabled = false;
+    toast('Error saving — try again');
+  }
 }
 
 // ══════════════════════════════════════════════════════
