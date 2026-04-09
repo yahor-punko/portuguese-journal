@@ -5,8 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Português — Learning Journal</title>
 <!--
-  VERSION: v10.4.2 | Build: 2026-04-09
+  VERSION: v10.4.3 | Build: 2026-04-09
   CHANGELOG:
+    v10.4.3 — Spaced repetition: Review tab with SM-2 flashcard (Again/Good/Easy), Database.vocab.updateReview()
     v10.4.2 — Admin Panel: inline edit for prompt_content (no modal)
     v10.4.1 — Remove deleteByTopicId aliases, fix caller signatures
     v10.4.0 — Replace legacy sb calls: admin check, loadSystemPrompts, loadGlobalApiKey → module methods
@@ -195,6 +196,17 @@ main{padding:2.5rem 3rem;max-width:760px;}
 .vocab-ru{font-size:15px;color:var(--ink3);flex:1;}
 .vocab-del{background:none;border:none;color:var(--ink4);cursor:pointer;font-size:18px;padding:0 4px;line-height:1;transition:color 0.15s;}
 .vocab-del:hover{color:var(--red);}
+.review-card{border:1px solid var(--line);border-radius:8px;padding:2rem;text-align:center;max-width:480px;margin:0 auto;}
+.review-card-word{font-family:'EB Garamond',serif;font-size:2.2rem;color:var(--ink);margin-bottom:0.5rem;}
+.review-card-hint{font-size:12px;color:var(--ink3);font-family:'Geist Mono',monospace;margin-bottom:1.5rem;}
+.review-card-answer{font-size:1.2rem;color:var(--ink2);min-height:2rem;margin-bottom:1.5rem;}
+.review-card-reveal{background:none;border:1px solid var(--line);border-radius:4px;padding:8px 20px;font-family:'Geist Mono',monospace;font-size:12px;color:var(--ink3);cursor:pointer;transition:all .15s;}
+.review-card-reveal:hover{border-color:var(--ink2);color:var(--ink);}
+.review-rating{display:flex;gap:10px;justify-content:center;margin-top:0.5rem;}
+.review-rating button{padding:8px 16px;font-family:'Geist Mono',monospace;font-size:11px;border-radius:4px;border:1px solid var(--line);background:none;cursor:pointer;transition:all .15s;}
+.review-rating button:hover{border-color:var(--ink2);}
+.review-progress{font-size:12px;color:var(--ink3);font-family:'Geist Mono',monospace;text-align:center;margin-bottom:1.25rem;}
+.review-empty{text-align:center;padding:3rem;color:var(--ink3);font-size:14px;}
 .vocab-when{font-family:'Geist Mono',monospace;font-size:10px;color:var(--ink4);}
 
 /* ── ERRORS ── */
@@ -588,6 +600,7 @@ main{padding:2.5rem 3rem;max-width:760px;}
       <button class="tab-btn" onclick="switchTab('exercises',this)">Exercises</button>
       <button class="tab-btn" onclick="switchTab('errors',this)">Errors <span id="error-count" style="font-size:10px;color:var(--red);font-family:'Geist Mono',monospace;"></span></button>
       <button class="tab-btn" onclick="switchTab('vocab',this)">Vocabulary <span id="vocab-count" style="font-size:10px;color:var(--ink3);font-family:'Geist Mono',monospace;"></span></button>
+      <button class="tab-btn" onclick="switchTab('review',this)">Review <span id="review-count" style="font-size:10px;color:var(--blue);font-family:'Geist Mono',monospace;"></span></button>
       <button class="tab-btn" onclick="switchTab('prompt',this)">Prompt</button>
     </div>
 
@@ -615,6 +628,10 @@ main{padding:2.5rem 3rem;max-width:760px;}
         <button class="btn btn-sm" onclick="addVocab()">Add</button>
       </div>
       <div id="vocab-list"></div>
+    </div>
+
+    <div id="tab-review" class="tab-panel">
+      <div id="review-area"></div>
     </div>
 
     <div id="tab-prompt" class="tab-panel">
@@ -1052,7 +1069,7 @@ main{padding:2.5rem 3rem;max-width:760px;}
 // ══════════════════════════════════════════════════════
 // VERSION INFO
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v10.4.2';
+const APP_VERSION = 'v10.4.3';
 const BUILD_DATE = '2026-03-26';
 console.log(`%c🇵🇹 Portuguese Learning Journal ${APP_VERSION}`, 'font-weight: bold; font-size: 14px; color: #2a6b3f;');
 console.log(`Build: ${BUILD_DATE} | REFACTORED: Modular architecture`);
@@ -1678,6 +1695,15 @@ const Database = (() => {
       return query('vocab', q =>
         q.delete().eq('topic_id', topicId),
         { op: 'delete vocab for topic' }
+      );
+    },
+
+    async updateReview(id, intervalDays) {
+      const nextReview = new Date(Date.now() + intervalDays * 86400000).toISOString();
+      return query('vocab', q =>
+        q.update({ interval_days: intervalDays, next_review_at: nextReview })
+         .eq('id', id),
+        { op: 'update vocab review schedule' }
       );
     }
   };
@@ -4478,6 +4504,7 @@ function switchTab(name, btn) {
   if (name === 'vocab') renderVocab();
   if (name === 'errors') renderErrors();
   if (name === 'prompt') loadTopicPrompt();
+  if (name === 'review') renderReview();
 }
 
 // Load cached explanation without auto-generating exercises
@@ -4840,10 +4867,89 @@ async function removeVocab(id) {
   renderTopicDetail();
 }
 
-function renderVocab() { 
+function renderVocab() {
   const topic = getTopic(currentTopicId);
   if (!topic) return;
-  TopicDetailController.renderVocabList(topic); 
+  TopicDetailController.renderVocabList(topic);
+}
+
+// ── Spaced Repetition ──────────────────────────────────
+
+let _reviewQueue = [];
+let _reviewIndex = 0;
+
+function _isDue(v) {
+  if (!v.next_review_at) return true;
+  return new Date(v.next_review_at) <= new Date();
+}
+
+function renderReview() {
+  const topic = getTopic(currentTopicId);
+  const el = document.getElementById('review-area');
+  if (!topic || !el) return;
+
+  _reviewQueue = (topic.vocab || []).filter(_isDue);
+  _reviewIndex = 0;
+
+  const countEl = document.getElementById('review-count');
+  if (countEl) countEl.textContent = _reviewQueue.length ? `(${_reviewQueue.length})` : '';
+
+  if (!_reviewQueue.length) {
+    el.innerHTML = '<div class="review-empty">No words due for review. Come back later!</div>';
+    return;
+  }
+
+  _showReviewCard(el);
+}
+
+function _showReviewCard(el) {
+  if (_reviewIndex >= _reviewQueue.length) {
+    el.innerHTML = '<div class="review-empty">Session complete! All due words reviewed.</div>';
+    document.getElementById('review-count').textContent = '';
+    return;
+  }
+
+  const v = _reviewQueue[_reviewIndex];
+  const progress = `${_reviewIndex + 1} / ${_reviewQueue.length}`;
+  const interval = v.interval_days || 1;
+
+  el.innerHTML = `
+    <div class="review-progress">${progress}</div>
+    <div class="review-card" id="review-card">
+      <div class="review-card-word">${v.pt}</div>
+      <div class="review-card-hint">tap to reveal</div>
+      <div class="review-card-answer" id="review-answer"></div>
+      <button class="review-card-reveal" id="review-reveal-btn" onclick="revealReviewCard()">Reveal</button>
+      <div class="review-rating" id="review-rating" style="display:none;">
+        <button onclick="submitReview(${v.id}, 1)" style="color:var(--red);">Again<br><span style="font-size:10px;opacity:.6;">1 day</span></button>
+        <button onclick="submitReview(${v.id}, ${Math.max(3, interval * 2)})">Good<br><span style="font-size:10px;opacity:.6;">${Math.max(3, interval * 2)} days</span></button>
+        <button onclick="submitReview(${v.id}, ${Math.max(7, interval * 3)})" style="color:var(--green);">Easy<br><span style="font-size:10px;opacity:.6;">${Math.max(7, interval * 3)} days</span></button>
+      </div>
+    </div>
+  `;
+}
+
+function revealReviewCard() {
+  const v = _reviewQueue[_reviewIndex];
+  document.getElementById('review-answer').textContent = v.en;
+  document.getElementById('review-reveal-btn').style.display = 'none';
+  document.getElementById('review-rating').style.display = 'flex';
+}
+
+async function submitReview(id, intervalDays) {
+  await Database.vocab.updateReview(id, intervalDays);
+
+  const topic = getTopic(currentTopicId);
+  if (topic) {
+    const v = topic.vocab.find(v => v.id === id);
+    if (v) {
+      v.interval_days = intervalDays;
+      v.next_review_at = new Date(Date.now() + intervalDays * 86400000).toISOString();
+    }
+  }
+
+  _reviewIndex++;
+  _showReviewCard(document.getElementById('review-area'));
 }
 
 // ══════════════════════════════════════════════════════
