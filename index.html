@@ -6239,9 +6239,10 @@ async function explainThenGenerate() {
     status.classList.add('loading');
 
     try {
+      const overviewPromptData = systemPrompts['topic_overview'];
       const explainData = await OpenAI.call(apiKey, buildTopicOverviewPrompt(topic), {
-        model: 'gpt-5.4-mini',
-        temperature: 0.2,
+        model: overviewPromptData?.model || 'gpt-5.4-mini',
+        temperature: overviewPromptData?.temperature || 0.2,
         schema: TOPIC_OVERVIEW_SCHEMA,
         schemaName: 'topic_overview'
       });
