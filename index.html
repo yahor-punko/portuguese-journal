@@ -5,8 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Português — Learning Journal</title>
 <!--
-  VERSION: v10.4.9 | Build: 2026-04-09
+  VERSION: v10.4.10 | Build: 2026-04-12
   CHANGELOG:
+    v10.4.10 — Fix deleteError/unfixError ReferenceError; model dropdown: 4x removed, 5.4-mini + 5.4 added
     v10.4.9 — Errors tab: filter pills by grammar_category, auto-reset on topic switch
     v10.4.8 — Global Review: spaced repetition across all topics, sidebar button with due count badge
     v10.4.7 — Topic scoring: best-attempt logic (min error_count) instead of average; 1 perfect run = 100%
@@ -770,9 +771,8 @@ main{padding:2.5rem 3rem;max-width:760px;}
           <div class="field" style="flex:1;">
             <label>Model</label>
             <select id="admin-prompt-default-model">
-              <option value="gpt-4o-mini">GPT-4o Mini</option>
               <option value="gpt-5.4-mini">GPT-5.4 Mini</option>
-              <option value="gpt-4o">GPT-4o</option>
+              <option value="gpt-5.4">GPT-5.4</option>
             </select>
           </div>
           <div class="field" style="flex:1;">
@@ -793,9 +793,8 @@ main{padding:2.5rem 3rem;max-width:760px;}
           <div class="field" style="flex:1;">
             <label>Model</label>
             <select id="admin-prompt-overview-model">
-              <option value="gpt-4o-mini">GPT-4o Mini</option>
               <option value="gpt-5.4-mini">GPT-5.4 Mini</option>
-              <option value="gpt-4o">GPT-4o</option>
+              <option value="gpt-5.4">GPT-5.4</option>
             </select>
           </div>
           <div class="field" style="flex:1;">
@@ -816,9 +815,8 @@ main{padding:2.5rem 3rem;max-width:760px;}
           <div class="field" style="flex:1;">
             <label>Model</label>
             <select id="admin-prompt-grading-model">
-              <option value="gpt-4o-mini">GPT-4o Mini</option>
               <option value="gpt-5.4-mini">GPT-5.4 Mini</option>
-              <option value="gpt-4o">GPT-4o</option>
+              <option value="gpt-5.4">GPT-5.4</option>
             </select>
           </div>
           <div class="field" style="flex:1;">
@@ -839,9 +837,8 @@ main{padding:2.5rem 3rem;max-width:760px;}
           <div class="field" style="flex:1;">
             <label>Model</label>
             <select id="admin-prompt-validator-model">
-              <option value="gpt-4o-mini">GPT-4o Mini</option>
               <option value="gpt-5.4-mini">GPT-5.4 Mini</option>
-              <option value="gpt-4o">GPT-4o</option>
+              <option value="gpt-5.4">GPT-5.4</option>
             </select>
           </div>
           <div class="field" style="flex:1;">
@@ -865,9 +862,8 @@ main{padding:2.5rem 3rem;max-width:760px;}
           <div class="field" style="flex:1;">
             <label>Model</label>
             <select id="admin-prompt-exam_grading-model">
-              <option value="gpt-4o-mini">GPT-4o Mini</option>
               <option value="gpt-5.4-mini">GPT-5.4 Mini</option>
-              <option value="gpt-4o">GPT-4o</option>
+              <option value="gpt-5.4">GPT-5.4</option>
             </select>
           </div>
           <div class="field" style="flex:1;">
@@ -1094,8 +1090,8 @@ main{padding:2.5rem 3rem;max-width:760px;}
 // ══════════════════════════════════════════════════════
 // VERSION INFO
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v10.4.9';
-const BUILD_DATE = '2026-04-09';
+const APP_VERSION = 'v10.4.10';
+const BUILD_DATE = '2026-04-12';
 const CHANGELOG = [
   'v10.4.5 — Progress sparkline (Canvas 2D) in topic header, color-coded trend',
   'v10.4.4 — Web Speech API: 🔊 vocab, exercises, review flashcard',
@@ -1144,9 +1140,9 @@ const CONFIG = {
   OPENAI: {
     ENDPOINT: 'https://api.openai.com/v1/chat/completions',
     MODELS: {
-      DEFAULT: 'gpt-4o-mini',
+      DEFAULT: 'gpt-5.4-mini',
       FAST: 'gpt-5.4-mini',
-      SMART: 'gpt-4o'
+      SMART: 'gpt-5.4-mini'
     },
     TEMPERATURE: {
       CREATIVE: 0.7,
@@ -1784,6 +1780,13 @@ const Database = (() => {
       );
     },
     
+    async delete(id) {
+      return query('errors', q =>
+        q.delete().eq('id', id),
+        { op: 'delete error by id' }
+      );
+    },
+
     async deleteAllForTopic(topicId) {
       return query('errors', q =>
         q.delete().eq('topic_id', topicId),
@@ -5343,38 +5346,35 @@ function renderGlobalVocabulary() {
 async function toggleErrorFixed(id, currentFixed) {
   // If marking as fixed, delete from database
   if (!currentFixed) {
-    await Database.errors.delete(id);
-    if (error) { 
-      console.error('Error deleting error:', error);
-      toast('Error: ' + error.message); 
-      return; 
+    const result = await Database.errors.delete(id);
+    if (!result && result !== null) {
+      console.error('Error deleting error:', result);
+      toast('Error deleting error');
+      return;
     }
-    
+
     // Remove from local state
     const t = getTopic(currentTopicId);
     if (t) {
       t.errors = t.errors.filter(e => e.id !== id);
     }
-    
+
     toast('Error removed');
   } else {
-    // If unmarking as fixed (shouldn't happen with delete approach, but keep for safety)
-    await Database.errors.update(id, {fixed: false});
-    if (error) { 
-      toast('Error: ' + error.message); 
-      return; 
-    }
-    
+    // If unmarking as fixed (skip — keep in list)
     const t = getTopic(currentTopicId);
-    if (t) { 
-      const err = t.errors.find(e => e.id === id); 
-      if (err) err.fixed = false; 
+    if (t) {
+      const err = t.errors.find(e => e.id === id);
+      if (err) err.fixed = false;
     }
   }
-  
+
   renderErrors();
   renderTopicDetail();
 }
+
+window.deleteError = (id) => toggleErrorFixed(id, false);
+window.unfixError  = (id) => toggleErrorFixed(id, true);
 
 window._errorCategoryFilter = null;
 
@@ -6938,7 +6938,7 @@ async function generateFinalExam(unitNumber, unitTopics) {
   try {
     // Call OpenAI with correct argument order: (apiKey, prompt, options)
     const response = await OpenAI.call(apiKey, prompt, {
-      model: 'gpt-4o-mini',
+      model: 'gpt-5.4-mini',
       temperature: 0.4,
       schema: EXERCISE_SCHEMA,
       schemaName: 'final_exam_generation'
