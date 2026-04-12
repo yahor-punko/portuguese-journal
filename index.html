@@ -5,8 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Português — Learning Journal</title>
 <!--
-  VERSION: v10.4.10 | Build: 2026-04-12
+  VERSION: v10.4.11 | Build: 2026-04-12
   CHANGELOG:
+    v10.4.11 — Fix topic edit (user_id not sent on update); fix delete prompt false "check console" alert
     v10.4.10 — Fix deleteError/unfixError ReferenceError; model dropdown: 4x removed, 5.4-mini + 5.4 added
     v10.4.9 — Errors tab: filter pills by grammar_category, auto-reset on topic switch
     v10.4.8 — Global Review: spaced repetition across all topics, sidebar button with due count badge
@@ -1090,7 +1091,7 @@ main{padding:2.5rem 3rem;max-width:760px;}
 // ══════════════════════════════════════════════════════
 // VERSION INFO
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v10.4.10';
+const APP_VERSION = 'v10.4.11';
 const BUILD_DATE = '2026-04-12';
 const CHANGELOG = [
   'v10.4.5 — Progress sparkline (Canvas 2D) in topic header, color-coded trend',
@@ -1910,7 +1911,7 @@ const Database = (() => {
 
     async delete(id) {
       return query('topic_prompts', q =>
-        q.delete().eq('id', id),
+        q.delete().eq('id', id).select(),
         { op: 'delete topic_prompt' }
       );
     }
@@ -1955,7 +1956,7 @@ const Database = (() => {
 
     async delete(id) {
       return query('exam_prompts', q =>
-        q.delete().eq('id', id),
+        q.delete().eq('id', id).select(),
         { op: 'delete exam_prompt' }
       );
     }
@@ -4904,11 +4905,12 @@ async function saveTopic() {
   const name = document.getElementById('mt-name').value.trim();
   if (!name) { toast('Topic name required'); return; }
   
+  const isNew = !editingTopicId;
   const payload = {
     unit: document.getElementById('mt-unit').value.trim(),
     name,
     custom_prompt: document.getElementById('mt-prompt').value.trim(),
-    user_id: currentUser.id
+    ...(isNew ? { user_id: currentUser.id } : {})
   };
   
   console.log('Payload:', payload);
