@@ -5,8 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Português — Learning Journal</title>
 <!--
-  VERSION: v10.4.15 | Build: 2026-04-14
+  VERSION: v10.4.16 | Build: 2026-04-14
   CHANGELOG:
+    v10.4.16 — Review: × button on cards to delete word from vocab (with confirm modal)
     v10.4.15 — Prompt tab: show notice + sync button when admin template diverged
     v10.4.14 — Fix vocab 409 duplicate: skip existing words in auto-save, silent create
     v10.4.13 — Remove all hardcoded model strings; retry/regen blocks use systemPrompts model
@@ -1071,6 +1072,20 @@ main{padding:2.5rem 3rem;max-width:760px;}
   </div>
 </div>
 
+<!-- REMOVE FROM REVIEW MODAL -->
+<div class="modal-overlay" id="modal-remove-review">
+  <div class="modal" style="max-width:400px;">
+    <h2>Remove word?</h2>
+    <p style="font-size:15px;color:var(--ink2);margin:1rem 0;">
+      "<span id="modal-remove-review-word" style="font-weight:500;"></span>" will be permanently deleted from your vocabulary and removed from all review sessions.
+    </p>
+    <div class="modal-footer">
+      <button class="btn btn-ghost btn-sm" onclick="closeModal('modal-remove-review')">Cancel</button>
+      <button class="btn btn-sm" style="background:var(--red);border-color:var(--red);color:#fff;" onclick="confirmRemoveFromReview()">Delete word</button>
+    </div>
+  </div>
+</div>
+
 <!-- ADD/EDIT TOPIC MODAL -->
 <div class="modal-overlay" id="modal-topic">
   <div class="modal">
@@ -1099,7 +1114,7 @@ main{padding:2.5rem 3rem;max-width:760px;}
 // ══════════════════════════════════════════════════════
 // VERSION INFO
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v10.4.15';
+const APP_VERSION = 'v10.4.16';
 const BUILD_DATE = '2026-04-14';
 const CHANGELOG = [
   'v10.4.5 — Progress sparkline (Canvas 2D) in topic header, color-coded trend',
@@ -5073,7 +5088,8 @@ function _showReviewCard(el) {
 
   el.innerHTML = `
     <div class="review-progress">${progress}</div>
-    <div class="review-card" id="review-card">
+    <div class="review-card" id="review-card" style="position:relative;">
+      <button onclick="openRemoveFromReview(${v.id}, '${v.pt.replace(/'/g, "\\'")}')" title="Remove word" style="position:absolute;top:8px;right:8px;background:none;border:none;cursor:pointer;font-size:18px;color:var(--ink3);line-height:1;padding:2px 6px;" onmouseover="this.style.color='var(--red)'" onmouseout="this.style.color='var(--ink3)'">×</button>
       <div class="review-card-word">${v.pt} <button class="speak-btn" onclick="speak('${v.pt.replace(/'/g, "\\'")}')" title="Pronounce" style="font-size:18px;">🔊</button></div>
       <div class="review-card-hint">tap to reveal</div>
       <div class="review-card-answer" id="review-answer"></div>
@@ -5170,7 +5186,8 @@ function _showGlobalReviewCard(el) {
 
   el.innerHTML = `
     <div class="review-progress">${progress}</div>
-    <div class="review-card" id="global-review-card">
+    <div class="review-card" id="global-review-card" style="position:relative;">
+      <button onclick="openRemoveFromReview(${v.id}, '${v.pt.replace(/'/g, "\\'")}')" title="Remove word" style="position:absolute;top:8px;right:8px;background:none;border:none;cursor:pointer;font-size:18px;color:var(--ink3);line-height:1;padding:2px 6px;" onmouseover="this.style.color='var(--red)'" onmouseout="this.style.color='var(--ink3)'">×</button>
       <div style="font-size:11px;color:var(--ink3);font-family:'Geist Mono',monospace;margin-bottom:0.75rem;">${v._topicName}</div>
       <div class="review-card-word">${v.pt} <button class="speak-btn" onclick="speak('${v.pt.replace(/'/g, "\\'")}')" title="Pronounce" style="font-size:18px;">🔊</button></div>
       <div class="review-card-hint">tap to reveal</div>
@@ -5209,6 +5226,48 @@ async function submitGlobalReview(id, intervalDays) {
   const next = _globalReviewQueue[_globalReviewIndex];
   _showGlobalReviewCard(document.getElementById('global-review-area'));
   if (next) speak(next.pt);
+}
+
+let _removeReviewWordId = null;
+
+function openRemoveFromReview(id, pt) {
+  _removeReviewWordId = id;
+  document.getElementById('modal-remove-review-word').textContent = pt;
+  openModal('modal-remove-review');
+}
+
+async function confirmRemoveFromReview() {
+  const id = _removeReviewWordId;
+  if (!id) return;
+  closeModal('modal-remove-review');
+
+  await Database.vocab.delete(id);
+
+  // Remove from all topics local state
+  for (const t of topics) {
+    const idx = (t.vocab || []).findIndex(v => v.id === id);
+    if (idx !== -1) { t.vocab.splice(idx, 1); break; }
+  }
+
+  // Advance queue (skip deleted card)
+  _reviewIndex++;
+  _globalReviewIndex++;
+  _reviewQueue = _reviewQueue.filter(v => v.id !== id);
+  _globalReviewQueue = _globalReviewQueue.filter(v => v.id !== id);
+
+  // Re-render whichever view is active
+  const reviewArea = document.getElementById('review-area');
+  const globalReviewArea = document.getElementById('global-review-area');
+  if (reviewArea && document.getElementById('view-topic')?.classList.contains('active')) {
+    _reviewIndex = Math.min(_reviewIndex, _reviewQueue.length);
+    _showReviewCard(reviewArea);
+  } else if (globalReviewArea) {
+    _globalReviewIndex = Math.min(_globalReviewIndex, _globalReviewQueue.length);
+    _showGlobalReviewCard(globalReviewArea);
+  }
+
+  updateGlobalReviewBadge();
+  toast('Word deleted');
 }
 
 // Update global review badge after data loads
