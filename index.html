@@ -5,8 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Português — Learning Journal</title>
 <!--
-  VERSION: v10.4.12 | Build: 2026-04-14
+  VERSION: v10.4.13 | Build: 2026-04-14
   CHANGELOG:
+    v10.4.13 — Remove all hardcoded model strings; retry/regen blocks use systemPrompts model
     v10.4.12 — Topic Prompts admin: full edit modal, working search + category filter, fix update false alert
     v10.4.11 — Fix topic edit (user_id not sent on update); fix delete prompt false "check console" alert
     v10.4.10 — Fix deleteError/unfixError ReferenceError; model dropdown: 4x removed, 5.4-mini + 5.4 added
@@ -1092,7 +1093,7 @@ main{padding:2.5rem 3rem;max-width:760px;}
 // ══════════════════════════════════════════════════════
 // VERSION INFO
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v10.4.12';
+const APP_VERSION = 'v10.4.13';
 const BUILD_DATE = '2026-04-14';
 const CHANGELOG = [
   'v10.4.5 — Progress sparkline (Canvas 2D) in topic header, color-coded trend',
@@ -6336,12 +6337,12 @@ async function generateExercise() {
       status.textContent = 'Regenerating (quality check failed)';
       
       exerciseData = await OpenAI.call(apiKey, buildPrompt(topic), {
-        model: 'gpt-5.4-mini',
-        temperature: 0.35,
+        model,
+        temperature,
         schema: EXERCISE_SCHEMA,
         schemaName: 'exercise_generation'
       });
-      
+
       console.log('✅ Regenerated, checking again...');
     } else {
       console.log('✅ Client-side validation passed');
@@ -6366,8 +6367,8 @@ async function generateExercise() {
       status.textContent = 'Regenerating';
       
       exerciseData = await OpenAI.call(apiKey, buildPrompt(topic), {
-        model: 'gpt-5.4-mini',
-        temperature: 0.35,
+        model,
+        temperature,
         schema: EXERCISE_SCHEMA,
         schemaName: 'exercise_generation'
       });
@@ -6939,7 +6940,7 @@ async function generateFinalExam(unitNumber, unitTopics) {
   try {
     // Call OpenAI with correct argument order: (apiKey, prompt, options)
     const response = await OpenAI.call(apiKey, prompt, {
-      model: 'gpt-5.4-mini',
+      model: CONFIG.OPENAI.MODELS.DEFAULT,
       temperature: 0.4,
       schema: EXERCISE_SCHEMA,
       schemaName: 'final_exam_generation'
@@ -7188,7 +7189,7 @@ async function gradeFinalExam(exam, userAnswers) {
   
   // Get model and temperature from system prompts
   const examGradingPromptData = systemPrompts['exam_grading'];
-  const model = examGradingPromptData?.model || 'gpt-4o-mini';
+  const model = examGradingPromptData?.model || CONFIG.OPENAI.MODELS.DEFAULT;
   const temperature = examGradingPromptData?.temperature || 0.2;
   
   // Use custom prompt from DB if available, otherwise use default
