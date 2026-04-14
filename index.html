@@ -5,8 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Português — Learning Journal</title>
 <!--
-  VERSION: v10.4.11 | Build: 2026-04-12
+  VERSION: v10.4.12 | Build: 2026-04-14
   CHANGELOG:
+    v10.4.12 — Topic Prompts admin: full edit modal, working search + category filter, fix update false alert
     v10.4.11 — Fix topic edit (user_id not sent on update); fix delete prompt false "check console" alert
     v10.4.10 — Fix deleteError/unfixError ReferenceError; model dropdown: 4x removed, 5.4-mini + 5.4 added
     v10.4.9 — Errors tab: filter pills by grammar_category, auto-reset on topic switch
@@ -885,8 +886,8 @@ main{padding:2.5rem 3rem;max-width:760px;}
         </div>
         
         <div style="margin-bottom:1rem;display:flex;gap:10px;">
-          <input type="text" id="topic-prompt-search" placeholder="Search prompts..." style="flex:1;padding:8px;border:1px solid var(--border);border-radius:4px;font-family:'Geist Mono',monospace;font-size:13px;">
-          <select id="topic-prompt-filter" onchange="renderTopicPromptsAdmin()" style="padding:8px;border:1px solid var(--border);border-radius:4px;font-family:'Geist Mono',monospace;font-size:13px;">
+          <input type="text" id="topic-prompt-search" placeholder="Search prompts..." oninput="renderTopicPromptsAdmin(false)" style="flex:1;padding:8px;border:1px solid var(--border);border-radius:4px;font-family:'Geist Mono',monospace;font-size:13px;">
+          <select id="topic-prompt-filter" onchange="renderTopicPromptsAdmin(false)" style="padding:8px;border:1px solid var(--border);border-radius:4px;font-family:'Geist Mono',monospace;font-size:13px;">
             <option value="">All categories</option>
             <option value="unit1">Unidade 1</option>
             <option value="unit2">Unidade 2</option>
@@ -1091,8 +1092,8 @@ main{padding:2.5rem 3rem;max-width:760px;}
 // ══════════════════════════════════════════════════════
 // VERSION INFO
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v10.4.11';
-const BUILD_DATE = '2026-04-12';
+const APP_VERSION = 'v10.4.12';
+const BUILD_DATE = '2026-04-14';
 const CHANGELOG = [
   'v10.4.5 — Progress sparkline (Canvas 2D) in topic header, color-coded trend',
   'v10.4.4 — Web Speech API: 🔊 vocab, exercises, review flashcard',
@@ -1904,7 +1905,7 @@ const Database = (() => {
 
     async update(id, data) {
       return query('topic_prompts', q =>
-        q.update({ ...data, updated_at: new Date().toISOString() }).eq('id', id),
+        q.update({ ...data, updated_at: new Date().toISOString() }).eq('id', id).select(),
         { op: 'update topic_prompt' }
       );
     },
@@ -3793,30 +3794,34 @@ const AdminViewController = (() => {
     }
   }
   
-  async function renderTopicPrompts() {
-    console.log('[AdminPanel] renderTopicPrompts called');
-    const prompts = await Database.topicPrompts.getAll();
+  let _allTopicPrompts = null;
 
-    console.log('[AdminPanel] Topic prompts response:', { prompts });
-
-    if (!prompts) {
-      console.error('Error loading topic prompts');
-      return;
+  async function renderTopicPrompts(forceReload = false) {
+    if (!_allTopicPrompts || forceReload) {
+      const fetched = await Database.topicPrompts.getAll();
+      if (!fetched) { console.error('Error loading topic prompts'); return; }
+      _allTopicPrompts = fetched;
     }
-    
+
     const container = document.getElementById('topic-prompts-list');
-    if (!container) {
-      console.error('[AdminPanel] topic-prompts-list element not found!');
+    if (!container) return;
+
+    const search = (document.getElementById('topic-prompt-search')?.value || '').toLowerCase().trim();
+    const category = document.getElementById('topic-prompt-filter')?.value || '';
+
+    let prompts = _allTopicPrompts;
+    if (category) prompts = prompts.filter(p => p.category === category);
+    if (search) prompts = prompts.filter(p =>
+      (p.prompt_name || '').toLowerCase().includes(search) ||
+      (p.prompt_content || '').toLowerCase().includes(search) ||
+      (p.description || '').toLowerCase().includes(search)
+    );
+
+    if (prompts.length === 0) {
+      container.innerHTML = '<div style="color:var(--ink3);text-align:center;padding:2rem;">No prompts match the filter.</div>';
       return;
     }
-    
-    console.log('[AdminPanel] Prompts count:', prompts?.length || 0);
-    
-    if (!prompts || prompts.length === 0) {
-      container.innerHTML = '<div style="color:var(--ink3);text-align:center;padding:2rem;">No topic prompts yet. Create one above.</div>';
-      return;
-    }
-    
+
     container.innerHTML = prompts.map(p => `
       <div class="topic-prompt-card" id="tpc-card-${p.id}" data-content="${(p.prompt_content || '').replace(/"/g, '&quot;').replace(/`/g, '&#96;')}">
         <div class="topic-prompt-card-header">
@@ -3833,21 +3838,12 @@ const AdminViewController = (() => {
         </div>
         <div class="topic-prompt-card-content" id="tpc-display-${p.id}">${p.prompt_content || 'No content'}</div>
         <div class="topic-prompt-card-actions" id="tpc-actions-${p.id}">
-          <button class="btn secondary" onclick="startEditPromptContent(${p.id})">Edit</button>
+          <button class="btn secondary" onclick="editTopicPrompt(${p.id})">Edit</button>
           <button class="btn secondary" onclick="duplicateTopicPrompt(${p.id})" title="Duplicate this prompt">Duplicate</button>
           <button class="btn secondary" style="color:var(--red);" onclick="deleteTopicPrompt(${p.id}, '${(p.prompt_name || '').replace(/'/g, "\\'")}')">Delete</button>
         </div>
-        <div class="tpc-edit-form" id="tpc-edit-${p.id}" style="display:none;">
-          <textarea class="tpc-textarea" id="tpc-ta-${p.id}"></textarea>
-          <div class="tpc-edit-actions">
-            <button class="btn" onclick="savePromptContent(${p.id})">Save</button>
-            <button class="btn secondary" onclick="cancelEditPromptContent(${p.id})">Cancel</button>
-          </div>
-        </div>
       </div>
     `).join('');
-    
-    console.log('[AdminPanel] List rendered with', prompts.length, 'prompts');
   }
   
   async function renderExamPrompts() {
@@ -3888,7 +3884,9 @@ const AdminViewController = (() => {
     `).join('');
   }
   
-  return { loadPanel, renderTopicPrompts, renderExamPrompts };
+  function clearTopicPromptsCache() { _allTopicPrompts = null; }
+
+  return { loadPanel, renderTopicPrompts, renderExamPrompts, clearTopicPromptsCache };
 })();
 
 // ────────────────────────────────────────────────────────
@@ -4554,7 +4552,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const searchInput = document.getElementById('topic-prompt-search');
   if (searchInput) {
     searchInput.addEventListener('input', debounce(() => {
-      renderTopicPromptsAdmin();
+      renderTopicPromptsAdmin(false);
     }, 300));
   }
 });
@@ -5602,7 +5600,7 @@ let currentEditingPromptId = null;
 /**
  * Render topic prompts list in admin panel
  */
-async function renderTopicPromptsAdmin() { await AdminViewController.renderTopicPrompts(); }
+async function renderTopicPromptsAdmin(forceReload = true) { await AdminViewController.renderTopicPrompts(forceReload); }
 
 /**
  * Get category label for display
