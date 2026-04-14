@@ -5,8 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Português — Learning Journal</title>
 <!--
-  VERSION: v10.4.13 | Build: 2026-04-14
+  VERSION: v10.4.14 | Build: 2026-04-14
   CHANGELOG:
+    v10.4.14 — Fix vocab 409 duplicate: skip existing words in auto-save, silent create
     v10.4.13 — Remove all hardcoded model strings; retry/regen blocks use systemPrompts model
     v10.4.12 — Topic Prompts admin: full edit modal, working search + category filter, fix update false alert
     v10.4.11 — Fix topic edit (user_id not sent on update); fix delete prompt false "check console" alert
@@ -1093,7 +1094,7 @@ main{padding:2.5rem 3rem;max-width:760px;}
 // ══════════════════════════════════════════════════════
 // VERSION INFO
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v10.4.13';
+const APP_VERSION = 'v10.4.14';
 const BUILD_DATE = '2026-04-14';
 const CHANGELOG = [
   'v10.4.5 — Progress sparkline (Canvas 2D) in topic header, color-coded trend',
@@ -1702,14 +1703,14 @@ const Database = (() => {
         return null;
       }
       
-      return query('vocab', q => 
-        q.insert({ 
-          topic_id: topicId, 
+      return query('vocab', q =>
+        q.insert({
+          topic_id: topicId,
           user_id: topicResult.user_id,
-          pt, 
-          en 
+          pt,
+          en
         }).select().single(),
-        { op: 'create vocab' }
+        { op: 'create vocab', silent: true }
       );
     },
     
@@ -2835,10 +2836,12 @@ Return results array with: correct, match_type, explanation, grammar_category, s
         }
       }
       
-      // Save vocabulary
+      // Save vocabulary (skip words already in local state to avoid 23505 duplicates)
       if (result.vocab && Array.isArray(result.vocab)) {
         for (const word of result.vocab) {
           if (word.pt && word.en) {
+            const alreadyExists = (topic.vocab || []).some(v => v.pt === word.pt);
+            if (alreadyExists) continue;
             const savedVocab = await Database.vocab.create(topic.id, word.pt, word.en);
             if (savedVocab) {
               newVocab.push(savedVocab);
