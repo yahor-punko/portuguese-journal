@@ -5306,13 +5306,9 @@ async function addGlobalVocab() {
     return;
   }
   
-  const data = await Database.vocab.create(payload);
-  if (error) { 
-    if (error.code === '23505') { // unique constraint violation
-      toast('Word already exists');
-    } else {
-      toast('Error: ' + error.message);
-    }
+  const data = await Database.vocab.create(parseInt(topicId), pt.toLowerCase(), en);
+  if (!data) {
+    toast('Error adding vocab');
     return;
   }
   
