@@ -5,8 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Português — Learning Journal</title>
 <!--
-  VERSION: v10.4.17 | Build: 2026-05-25
+  VERSION: v10.4.18 | Build: 2026-05-25
   CHANGELOG:
+    v10.4.18 — feat: theme exams (4 grammar + 3 essay) on home; fix showFinalExamTaking currentExam
     v10.4.17 — fix: examPrompts.update missing .select() caused false "Error saving" alert
     v10.4.16 — Review: × button on cards to delete word from vocab (with confirm modal)
     v10.4.15 — Prompt tab: show notice + sync button when admin template diverged
@@ -524,6 +525,56 @@ main{padding:2.5rem 3rem;max-width:760px;}
   line-height: 1.5;
   color: var(--ink1);
 }
+
+/* Theme Exam Cards */
+.theme-exam-card {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 1rem 0.75rem;
+  background: var(--white);
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+  text-align: center;
+  user-select: none;
+}
+.theme-exam-card:hover {
+  border-color: var(--green);
+  background: var(--green-bg);
+}
+.tec-icon { font-size: 22px; margin-bottom: 0.3rem; }
+.tec-title { font-size: 13px; font-weight: 500; color: var(--ink); margin-bottom: 0.2rem; }
+.tec-sub { font-size: 10px; color: var(--ink3); font-family: 'Geist Mono', monospace; line-height: 1.4; }
+.tec-score { margin-top: 0.4rem; font-size: 11px; font-family: 'Geist Mono', monospace; color: var(--green); }
+
+/* Essay View */
+.essay-task-box {
+  background: var(--blue-bg);
+  border: 1px solid var(--blue);
+  border-radius: 4px;
+  padding: 1rem 1.25rem;
+  margin-bottom: 1.5rem;
+}
+.essay-hint {
+  display: inline-block;
+  font-family: 'Geist Mono', monospace;
+  font-size: 11px;
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  padding: 2px 8px;
+  margin: 2px;
+  color: var(--ink2);
+}
+.essay-correction {
+  background: var(--bg);
+  border-left: 3px solid var(--red);
+  padding: 0.5rem 0.75rem;
+  margin-bottom: 0.5rem;
+  border-radius: 0 4px 4px 0;
+}
+.essay-correction-orig { font-size: 13px; color: var(--red); text-decoration: line-through; }
+.essay-correction-fix { font-size: 13px; color: var(--green); font-weight: 500; }
+.essay-correction-note { font-size: 11px; color: var(--ink3); font-style: italic; margin-top: 2px; }
 </style>
 </head>
 <body>
@@ -597,6 +648,7 @@ main{padding:2.5rem 3rem;max-width:760px;}
     <div style="margin-top:1.5rem;">
       <button class="btn btn-ghost" onclick="openAddTopic()">+ Add new topic</button>
     </div>
+    <div id="home-theme-exams" style="margin-top:2rem;"></div>
   </div>
 
   <!-- TOPIC DETAIL -->
@@ -975,6 +1027,35 @@ main{padding:2.5rem 3rem;max-width:760px;}
       </button>
     </div>
   </div>
+
+  <!-- ESSAY VIEW -->
+  <div id="view-essay" class="view">
+    <button class="back-btn" onclick="showHome()">← Back</button>
+    <div class="view-head">
+      <h1 id="essay-view-title">Эссе</h1>
+      <p id="essay-view-subtitle" style="color:var(--ink3);font-family:'Geist Mono',monospace;font-size:12px;"></p>
+    </div>
+    <div class="essay-task-box">
+      <div style="font-family:'Geist Mono',monospace;font-size:11px;color:var(--blue);margin-bottom:0.5rem;letter-spacing:.06em;">ЗАДАНИЕ</div>
+      <div id="essay-task-text" style="font-size:15px;color:var(--ink1);line-height:1.75;margin-bottom:0.75rem;"></div>
+      <div id="essay-hints"></div>
+    </div>
+    <div id="essay-write-panel">
+      <div class="field">
+        <label>Ваш текст на португальском</label>
+        <textarea id="essay-textarea" rows="10" oninput="updateEssayWordCount()" style="font-family:'EB Garamond',serif;font-size:16px;resize:vertical;width:100%;border:1px solid var(--line);border-radius:4px;padding:.75rem 1rem;outline:none;" placeholder="Escreva aqui o seu texto em português..."></textarea>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:0.5rem;">
+          <span id="essay-word-count" style="font-family:'Geist Mono',monospace;font-size:11px;color:var(--ink3);">0 слов</span>
+          <button class="btn" id="essay-grade-btn" onclick="gradeEssay()">Оценить текст</button>
+        </div>
+      </div>
+    </div>
+    <div id="essay-results" style="display:none;margin-top:2rem;"></div>
+    <div id="essay-retry-bar" style="display:none;margin-top:1.5rem;gap:1rem;justify-content:center;">
+      <button class="btn secondary" onclick="showHome()">На главную</button>
+      <button class="btn btn-ghost" onclick="resetEssay()">Написать ещё раз</button>
+    </div>
+  </div>
 </main>
 </div>
 
@@ -1045,9 +1126,15 @@ main{padding:2.5rem 3rem;max-width:760px;}
         <option value="unit8">Unidade 8</option>
         <option value="unit9">Unidade 9</option>
         <option value="unit10">Unidade 10</option>
+        <optgroup label="── Тематические экзамены ──">
+          <option value="theme_verbs">Глаголы (ser/estar/ir/ter...)</option>
+          <option value="theme_prepositions">Предлоги (em/para/de/a)</option>
+          <option value="theme_ser_estar">Ser vs Estar</option>
+          <option value="theme_time_reflexive">Время суток + Reflexive</option>
+        </optgroup>
       </select>
     </div>
-    
+
     <div class="field">
       <label>Description</label>
       <input type="text" id="mep-description" placeholder="Personal identification, basic grammar (SER, TER, -AR verbs)">
@@ -1115,7 +1202,7 @@ main{padding:2.5rem 3rem;max-width:760px;}
 // ══════════════════════════════════════════════════════
 // VERSION INFO
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v10.4.17';
+const APP_VERSION = 'v10.4.18';
 const BUILD_DATE = '2026-04-14';
 const CHANGELOG = [
   'v10.4.5 — Progress sparkline (Canvas 2D) in topic header, color-coded trend',
@@ -1344,6 +1431,53 @@ const TOPIC_OVERVIEW_SCHEMA = {
 
 // Schema validation check
 console.log('📋 TOPIC_OVERVIEW_SCHEMA.artifacts:', TOPIC_OVERVIEW_SCHEMA.properties.artifacts);
+
+const THEME_EXAMS = {
+  theme_verbs: {
+    title: 'Глаголы',
+    icon: '📝',
+    sub: 'ser · estar · ir · ter · fazer · pôr...',
+  },
+  theme_prepositions: {
+    title: 'Предлоги',
+    icon: '📌',
+    sub: 'em · para · de · a',
+  },
+  theme_ser_estar: {
+    title: 'Ser vs Estar',
+    icon: '⚖️',
+    sub: 'постоянное vs временное',
+  },
+  theme_time_reflexive: {
+    title: 'Время + Reflexive',
+    icon: '🕐',
+    sub: 'horas · acordar · levantar...',
+  }
+};
+
+const ESSAYS = {
+  essay_intro: {
+    title: 'Кто я и откуда',
+    icon: '👤',
+    sub: 'описание · хобби',
+    task: 'Напишите 5–8 предложений о себе на португальском: как вас зовут, откуда вы, сколько вам лет, как вы выглядите и какие у вас хобби.',
+    hints: ['Me chamo...', 'Sou de...', 'Tenho ... anos', 'Gosto de...', 'Sou ... (adjectivo)']
+  },
+  essay_routine: {
+    title: 'Моя рутина',
+    icon: '📅',
+    sub: 'распорядок дня',
+    task: 'Опишите ваш обычный день (5–8 предложений): когда просыпаетесь, что делаете утром, днём и вечером. Используйте reflexive verbs и время суток.',
+    hints: ['Acordo às...', 'Levanto-me...', 'De manhã...', 'À tarde...', 'À noite...', 'Deito-me às...']
+  },
+  essay_restaurant: {
+    title: 'В ресторане',
+    icon: '🍽️',
+    sub: 'заказ · диалог',
+    task: 'Напишите диалог или короткую сцену в ресторане (5–8 предложений): как входите, заказываете блюда и напитки, просите счёт.',
+    hints: ['Boa tarde, queria...', 'Pode trazer...', 'Para mim...', 'A conta, por favor', 'É para aqui']
+  }
+};
 
 const EXERCISE_SCHEMA = {
   type: "object",
@@ -4731,7 +4865,43 @@ function renderSidebarTopics() { SidebarController.render(); }
 // ══════════════════════════════════════════════════════
 // HOME LIST
 // ══════════════════════════════════════════════════════
-function renderHomeList() { SidebarController.renderHome(); }
+function renderHomeList() {
+  SidebarController.renderHome();
+  renderThemeExamCards();
+}
+
+function renderThemeExamCards() {
+  const el = document.getElementById('home-theme-exams');
+  if (!el) return;
+
+  const grammarCards = Object.entries(THEME_EXAMS).map(([key, cfg]) => {
+    const exam = finalExams.find(e => e.unit_key === key);
+    const scoreHTML = exam
+      ? `<div class="tec-score">${exam.best_score >= 80 ? '✓ ' : ''}${exam.best_score}%</div>`
+      : '';
+    return `<div class="theme-exam-card" onclick="startThemeExam('${key}')">
+      <div class="tec-icon">${cfg.icon}</div>
+      <div class="tec-title">${cfg.title}</div>
+      <div class="tec-sub">${cfg.sub}</div>
+      ${scoreHTML}
+    </div>`;
+  });
+
+  const essayCards = Object.entries(ESSAYS).map(([key, cfg]) => `
+    <div class="theme-exam-card" onclick="startEssay('${key}')">
+      <div class="tec-icon">${cfg.icon}</div>
+      <div class="tec-title">${cfg.title}</div>
+      <div class="tec-sub">${cfg.sub}</div>
+    </div>`
+  );
+
+  el.innerHTML = `
+    <div style="font-family:'Geist Mono',monospace;font-size:11px;color:var(--ink3);letter-spacing:.08em;margin-bottom:0.75rem;">ТЕМАТИЧЕСКИЕ ЭКЗАМЕНЫ</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(145px,1fr));gap:10px;">
+      ${[...grammarCards, ...essayCards].join('')}
+    </div>
+  `;
+}
 
 // ══════════════════════════════════════════════════════
 // TOPIC DETAIL RENDER
@@ -7060,6 +7230,245 @@ async function generateFinalExam(unitNumber, unitTopics) {
 }
 
 /**
+ * Start a theme-based grammar exam
+ */
+async function startThemeExam(themeKey) {
+  const theme = THEME_EXAMS[themeKey];
+  if (!theme) return;
+
+  let exam = getFinalExam(themeKey);
+
+  if (!exam) {
+    if (!confirm(`Сгенерировать тест «${theme.title}»?\n\nБудет создан тест с 10–15 вопросами по теме. Можно пересдавать неограниченно.`)) return;
+    exam = await generateThemeExam(themeKey, theme);
+    if (!exam) return;
+  }
+
+  showFinalExamTaking(exam);
+}
+
+/**
+ * Generate theme exam questions using AI
+ */
+async function generateThemeExam(themeKey, theme) {
+  const apiKey = await OpenAI.getActiveApiKey();
+  if (!apiKey) {
+    toast('No API key configured. Contact administrator.');
+    return null;
+  }
+
+  const examPrompt = examPrompts.find(p => p.unit_key === themeKey);
+  if (!examPrompt) {
+    alert(`Нет промта для теста «${theme.title}».\n\nСоздайте промт в Admin Panel → Exam Prompts.`);
+    return null;
+  }
+
+  toast('Генерирую тест...');
+
+  try {
+    const response = await OpenAI.call(apiKey, examPrompt.prompt_content, {
+      model: CONFIG.OPENAI.MODELS.DEFAULT,
+      temperature: 0.4,
+      schema: EXERCISE_SCHEMA,
+      schemaName: 'theme_exam_generation'
+    });
+
+    if (!response || !response.items || response.items.length === 0) {
+      toast('Error: Invalid exam generated');
+      return null;
+    }
+
+    const examData = await Database.finalExams.create(
+      currentUser.id, theme.title, themeKey, response.items
+    );
+
+    if (!examData) {
+      toast('Error saving exam');
+      return null;
+    }
+
+    finalExams.push(examData);
+    toast(`Тест сгенерирован: ${response.items.length} вопросов`);
+    return examData;
+
+  } catch (err) {
+    return ErrorHandler.handle(err, { module: 'ThemeExam', operation: 'generate' });
+  }
+}
+
+// ══════════════════════════════════════════════════════
+// ESSAY
+// ══════════════════════════════════════════════════════
+
+let currentEssayKey = null;
+
+function startEssay(essayKey) {
+  const essay = ESSAYS[essayKey];
+  if (!essay) return;
+
+  currentEssayKey = essayKey;
+
+  document.getElementById('essay-view-title').textContent = essay.title;
+  document.getElementById('essay-view-subtitle').textContent = essay.sub;
+  document.getElementById('essay-task-text').textContent = essay.task;
+  document.getElementById('essay-hints').innerHTML =
+    essay.hints.map(h => `<span class="essay-hint">${h}</span>`).join('');
+
+  document.getElementById('essay-textarea').value = '';
+  document.getElementById('essay-word-count').textContent = '0 слов';
+
+  const writePanel = document.getElementById('essay-write-panel');
+  const resultsEl = document.getElementById('essay-results');
+  const retryBar = document.getElementById('essay-retry-bar');
+  writePanel.style.display = '';
+  resultsEl.style.display = 'none';
+  resultsEl.innerHTML = '';
+  retryBar.style.display = 'none';
+
+  const btn = document.getElementById('essay-grade-btn');
+  btn.disabled = false;
+  btn.textContent = 'Оценить текст';
+
+  showView('essay');
+}
+
+function updateEssayWordCount() {
+  const text = document.getElementById('essay-textarea').value.trim();
+  const count = text ? text.split(/\s+/).length : 0;
+  document.getElementById('essay-word-count').textContent = `${count} слов`;
+}
+
+async function gradeEssay() {
+  const essay = ESSAYS[currentEssayKey];
+  if (!essay) return;
+
+  const text = document.getElementById('essay-textarea').value.trim();
+  if (!text) { alert('Напишите текст для оценки.'); return; }
+  if (text.split(/\s+/).length < 3) { alert('Текст слишком короткий.'); return; }
+
+  const apiKey = await OpenAI.getActiveApiKey();
+  if (!apiKey) { toast('No API key configured.'); return; }
+
+  const btn = document.getElementById('essay-grade-btn');
+  btn.disabled = true;
+  btn.textContent = 'Оцениваю...';
+
+  const prompt = `You are a European Portuguese language teacher grading a student's short writing exercise.
+
+Task given to student: "${essay.task}"
+
+Student's text:
+"""
+${text}
+"""
+
+The student is at A1/A2 level learning European Portuguese. Grade their writing and provide detailed feedback.
+
+Return JSON matching the required schema.`;
+
+  const gradingSchema = {
+    type: "object",
+    required: ["score", "level", "grammar_issues", "vocabulary_feedback", "coherence_feedback", "corrected_text", "overall_feedback"],
+    additionalProperties: false,
+    properties: {
+      score: { type: "integer", description: "Score 0-100" },
+      level: { type: "string", description: "Estimated CEFR level: A1, A2, B1" },
+      grammar_issues: {
+        type: "array",
+        items: {
+          type: "object",
+          required: ["original", "correction", "explanation"],
+          additionalProperties: false,
+          properties: {
+            original: { type: "string" },
+            correction: { type: "string" },
+            explanation: { type: "string" }
+          }
+        }
+      },
+      vocabulary_feedback: { type: "string" },
+      coherence_feedback: { type: "string" },
+      corrected_text: { type: "string" },
+      overall_feedback: { type: "string" }
+    }
+  };
+
+  try {
+    const result = await OpenAI.call(apiKey, prompt, {
+      model: CONFIG.OPENAI.MODELS.DEFAULT,
+      temperature: 0.3,
+      schema: gradingSchema,
+      schemaName: 'essay_grading'
+    });
+
+    if (!result) throw new Error('No result from API');
+    showEssayResults(result);
+
+  } catch (err) {
+    ErrorHandler.handle(err, { module: 'Essay', operation: 'grade' });
+    btn.disabled = false;
+    btn.textContent = 'Оценить текст';
+  }
+}
+
+function showEssayResults(result) {
+  const passed = result.score >= 70;
+
+  const issuesHTML = result.grammar_issues && result.grammar_issues.length > 0
+    ? result.grammar_issues.map(issue => `
+        <div class="essay-correction">
+          <div class="essay-correction-orig">${escapeHtml(issue.original)}</div>
+          <div class="essay-correction-fix">→ ${escapeHtml(issue.correction)}</div>
+          <div class="essay-correction-note">${escapeHtml(issue.explanation)}</div>
+        </div>`).join('')
+    : '<div style="font-size:14px;color:var(--green);">Грамматических ошибок не найдено!</div>';
+
+  document.getElementById('essay-results').innerHTML = `
+    <div style="text-align:center;padding:1.5rem 0 1rem;">
+      <div style="font-size:48px;font-weight:500;color:${passed ? 'var(--green)' : 'var(--red)'};">${result.score}%</div>
+      <div style="font-family:'Geist Mono',monospace;font-size:12px;color:var(--ink3);margin-top:0.25rem;">Уровень: ${result.level}</div>
+    </div>
+
+    <div style="background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:1.25rem;margin-bottom:1rem;">
+      <div style="font-family:'Geist Mono',monospace;font-size:11px;color:var(--ink3);margin-bottom:0.5rem;">ОБЩАЯ ОЦЕНКА</div>
+      <div style="font-size:14px;color:var(--ink1);line-height:1.7;">${escapeHtml(result.overall_feedback)}</div>
+    </div>
+
+    <div style="background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:1.25rem;margin-bottom:1rem;">
+      <div style="font-family:'Geist Mono',monospace;font-size:11px;color:var(--ink3);margin-bottom:0.75rem;">ГРАММАТИКА</div>
+      ${issuesHTML}
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem;">
+      <div style="background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:1rem;">
+        <div style="font-family:'Geist Mono',monospace;font-size:11px;color:var(--ink3);margin-bottom:0.4rem;">СЛОВАРНЫЙ ЗАПАС</div>
+        <div style="font-size:13px;color:var(--ink2);line-height:1.6;">${escapeHtml(result.vocabulary_feedback)}</div>
+      </div>
+      <div style="background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:1rem;">
+        <div style="font-family:'Geist Mono',monospace;font-size:11px;color:var(--ink3);margin-bottom:0.4rem;">СВЯЗНОСТЬ</div>
+        <div style="font-size:13px;color:var(--ink2);line-height:1.6;">${escapeHtml(result.coherence_feedback)}</div>
+      </div>
+    </div>
+
+    <div style="background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:1.25rem;">
+      <div style="font-family:'Geist Mono',monospace;font-size:11px;color:var(--ink3);margin-bottom:0.5rem;">ИСПРАВЛЕННЫЙ ТЕКСТ</div>
+      <div style="font-size:15px;color:var(--ink1);line-height:1.8;font-family:'EB Garamond',serif;white-space:pre-wrap;">${escapeHtml(result.corrected_text)}</div>
+    </div>
+  `;
+
+  document.getElementById('essay-results').style.display = 'block';
+  document.getElementById('essay-write-panel').style.display = 'none';
+  const retryBar = document.getElementById('essay-retry-bar');
+  retryBar.style.display = 'flex';
+
+  document.getElementById('essay-results').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function resetEssay() {
+  startEssay(currentEssayKey);
+}
+
+/**
  * Show final exam taking interface
  */
 let currentExam = null;
@@ -7068,7 +7477,31 @@ let currentExamAnswers = {};
 /**
  * Show final exam taking interface
  */
-function showFinalExamTaking(exam) { ExamViewController.renderTaking(exam); }
+function showFinalExamTaking(exam) {
+  currentExam = exam;
+  currentExamAnswers = {};
+
+  const unitLabel = THEME_EXAMS[exam.unit_key]
+    ? THEME_EXAMS[exam.unit_key].title
+    : exam.unit_name || exam.unit_key.replace('unit', 'Unidade ');
+  document.getElementById('exam-unit-name').textContent = unitLabel;
+  document.getElementById('exam-meta').textContent =
+    `${exam.questions.length} questions · Attempt #${(exam.attempts || 0) + 1}`;
+
+  renderExamQuestions(exam.questions);
+
+  const progress = document.getElementById('exam-progress');
+  const submitBtn = document.getElementById('exam-submit-btn');
+  const statusEl = document.getElementById('exam-completion-status');
+  if (progress) progress.style.display = '';
+  if (submitBtn) { submitBtn.style.display = ''; submitBtn.disabled = true; submitBtn.textContent = 'Submit Exam'; }
+  if (statusEl) { statusEl.style.display = ''; statusEl.textContent = ''; }
+
+  document.getElementById('exam-progress-text').textContent = `0 / ${exam.questions.length}`;
+  document.getElementById('exam-progress-bar').style.width = '0%';
+
+  showView('final-exam');
+}
 
 /**
  * Render all exam questions
