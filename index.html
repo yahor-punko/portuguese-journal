@@ -5,8 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Português — Learning Journal</title>
 <!--
-  VERSION: v10.4.22 | Build: 2026-05-25
+  VERSION: v10.4.23 | Build: 2026-05-25
   CHANGELOG:
+    v10.4.23 — fix: theme_verbs prompt — present tense only (A1), remove past tense examples
     v10.4.22 — fix: essay grading prompt — force all feedback fields in English
     v10.4.21 — revert writing blocks to v10.4.19; add DEFAULT_THEME_PROMPTS for 4 grammar themes
     v10.4.20 — writing blocks: intro+routine=essay, restaurant=dialogue; grading prompt updated
@@ -1206,7 +1207,7 @@ main{padding:2.5rem 3rem;max-width:760px;}
 // ══════════════════════════════════════════════════════
 // VERSION INFO
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v10.4.22';
+const APP_VERSION = 'v10.4.23';
 const BUILD_DATE = '2026-04-14';
 const CHANGELOG = [
   'v10.4.5 — Progress sparkline (Canvas 2D) in topic header, color-coded trend',
@@ -1468,11 +1469,11 @@ ser, estar, saber, ouvir, ir, ver, vir, ter, fazer, pôr.
 Cover all 10 verbs. Mix question types:
 - fill: conjugation gap — "Eu ___ (ser) estudante." → canonical_answer: "sou"
 - translate: English → Portuguese — "She goes to school." → "Ela vai à escola."
-- choice: pick correct form — "Eles ___ ao cinema. a) foram b) iam c) são d) vão" → "a"
-- transform: change person or tense — "Eu faço → Eles ___" → "fazem"
+- choice: pick correct form — "Eles ___ ao cinema. a) vão b) são d) têm d) fazem" → "a"
+- transform: change person — "Eu faço → Eles ___" → "fazem"
 - correct: fix the error — "Eu sabo a resposta." → "Eu sei a resposta."
 
-Focus on: present indicative (presente) and simple past (pretérito perfeito).
+Focus on: present indicative (presente) only — A1 level, no past tenses.
 Include accepted_variants for minor spelling differences.
 
 Use only European Portuguese (EP) forms — not Brazilian.`,
