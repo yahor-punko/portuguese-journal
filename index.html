@@ -5,8 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Português — Learning Journal</title>
 <!--
-  VERSION: v10.4.19 | Build: 2026-05-25
+  VERSION: v10.4.20 | Build: 2026-05-25
   CHANGELOG:
+    v10.4.20 — writing blocks: intro+routine=essay, restaurant=dialogue; grading prompt updated
     v10.4.19 — i18n: translate all Russian strings in theme exams / essay to English
     v10.4.18 — feat: theme exams (4 grammar + 3 essay) on home; fix showFinalExamTaking currentExam
     v10.4.17 — fix: examPrompts.update missing .select() caused false "Error saving" alert
@@ -1044,7 +1045,7 @@ main{padding:2.5rem 3rem;max-width:760px;}
     <div id="essay-write-panel">
       <div class="field">
         <label>Your text in Portuguese</label>
-        <textarea id="essay-textarea" rows="10" oninput="updateEssayWordCount()" style="font-family:'EB Garamond',serif;font-size:16px;resize:vertical;width:100%;border:1px solid var(--line);border-radius:4px;padding:.75rem 1rem;outline:none;" placeholder="Escreva aqui o seu texto em português..."></textarea>
+        <textarea id="essay-textarea" rows="12" oninput="updateEssayWordCount()" style="font-family:'EB Garamond',serif;font-size:16px;resize:vertical;width:100%;border:1px solid var(--line);border-radius:4px;padding:.75rem 1rem;outline:none;" placeholder="Escreva aqui o seu texto em português..."></textarea>
         <div style="display:flex;justify-content:space-between;align-items:center;margin-top:0.5rem;">
           <span id="essay-word-count" style="font-family:'Geist Mono',monospace;font-size:11px;color:var(--ink3);">0 words</span>
           <button class="btn" id="essay-grade-btn" onclick="gradeEssay()">Grade text</button>
@@ -1203,7 +1204,7 @@ main{padding:2.5rem 3rem;max-width:760px;}
 // ══════════════════════════════════════════════════════
 // VERSION INFO
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v10.4.19';
+const APP_VERSION = 'v10.4.20';
 const BUILD_DATE = '2026-04-14';
 const CHANGELOG = [
   'v10.4.5 — Progress sparkline (Canvas 2D) in topic header, color-coded trend',
@@ -1460,23 +1461,23 @@ const ESSAYS = {
   essay_intro: {
     title: 'Who I Am',
     icon: '👤',
-    sub: 'description · hobbies',
+    sub: 'essay · description',
     task: 'Write 5–8 sentences about yourself in Portuguese: your name, where you are from, your age, what you look like, and your hobbies.',
     hints: ['Me chamo...', 'Sou de...', 'Tenho ... anos', 'Gosto de...', 'Sou ... (adjectivo)']
   },
   essay_routine: {
     title: 'My Routine',
     icon: '📅',
-    sub: 'daily schedule',
-    task: 'Describe your typical day (5–8 sentences): when you wake up, what you do in the morning, afternoon, and evening. Use reflexive verbs and times of day.',
+    sub: 'essay · daily life',
+    task: 'Write 5–8 sentences describing your typical day: when you wake up, what you do in the morning, afternoon, and evening. Use reflexive verbs and times of day.',
     hints: ['Acordo às...', 'Levanto-me...', 'De manhã...', 'À tarde...', 'À noite...', 'Deito-me às...']
   },
   essay_restaurant: {
     title: 'At the Restaurant',
     icon: '🍽️',
-    sub: 'ordering · dialogue',
-    task: 'Write a dialogue or short scene at a restaurant (5–8 sentences): arriving, ordering food and drinks, and asking for the bill.',
-    hints: ['Boa tarde, queria...', 'Pode trazer...', 'Para mim...', 'A conta, por favor', 'É para aqui']
+    sub: 'dialogue · ordering',
+    task: 'Write a dialogue (6–10 lines) between a customer and a waiter at a Portuguese restaurant. Cover: greeting, ordering food and drinks, asking for the bill. Write both sides.',
+    hints: ['— Boa tarde! O que deseja?', '— Queria...', '— E para beber?', '— Pode trazer...', '— A conta, se faz favor.', '— Aqui tem.']
   }
 };
 
@@ -7354,7 +7355,7 @@ async function gradeEssay() {
   btn.disabled = true;
   btn.textContent = 'Grading...';
 
-  const prompt = `You are a European Portuguese language teacher grading a student's short writing exercise.
+  const prompt = `You are a European Portuguese language teacher grading a student's writing exercise.
 
 Task given to student: "${essay.task}"
 
@@ -7363,7 +7364,7 @@ Student's text:
 ${text}
 """
 
-The student is at A1/A2 level learning European Portuguese. Grade their writing and provide detailed feedback.
+The student is at A1/A2 level learning European Portuguese. Evaluate grammar, vocabulary, coherence, and (if it is a dialogue) naturalness of the exchanges. Provide specific corrections and encouraging feedback.
 
 Return JSON matching the required schema.`;
 
