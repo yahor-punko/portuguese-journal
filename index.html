@@ -5,8 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Português — Learning Journal</title>
 <!--
-  VERSION: v10.4.21 | Build: 2026-05-25
+  VERSION: v10.4.22 | Build: 2026-05-25
   CHANGELOG:
+    v10.4.22 — fix: essay grading prompt — force all feedback fields in English
     v10.4.21 — revert writing blocks to v10.4.19; add DEFAULT_THEME_PROMPTS for 4 grammar themes
     v10.4.20 — writing blocks: intro+routine=essay, restaurant=dialogue; grading prompt updated
     v10.4.19 — i18n: translate all Russian strings in theme exams / essay to English
@@ -1205,7 +1206,7 @@ main{padding:2.5rem 3rem;max-width:760px;}
 // ══════════════════════════════════════════════════════
 // VERSION INFO
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v10.4.21';
+const APP_VERSION = 'v10.4.22';
 const BUILD_DATE = '2026-04-14';
 const CHANGELOG = [
   'v10.4.5 — Progress sparkline (Canvas 2D) in topic header, color-coded trend',
@@ -7441,6 +7442,8 @@ ${text}
 """
 
 The student is at A1/A2 level learning European Portuguese. Evaluate grammar, vocabulary, coherence, and (if it is a dialogue) naturalness of the exchanges. Provide specific corrections and encouraging feedback.
+
+IMPORTANT: Write ALL feedback fields (overall_feedback, vocabulary_feedback, coherence_feedback, grammar issue explanations) in English only.
 
 Return JSON matching the required schema.`;
 
