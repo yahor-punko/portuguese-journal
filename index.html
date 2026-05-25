@@ -5,8 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Português — Learning Journal</title>
 <!--
-  VERSION: v10.4.16 | Build: 2026-04-14
+  VERSION: v10.4.17 | Build: 2026-05-25
   CHANGELOG:
+    v10.4.17 — fix: examPrompts.update missing .select() caused false "Error saving" alert
     v10.4.16 — Review: × button on cards to delete word from vocab (with confirm modal)
     v10.4.15 — Prompt tab: show notice + sync button when admin template diverged
     v10.4.14 — Fix vocab 409 duplicate: skip existing words in auto-save, silent create
@@ -1114,7 +1115,7 @@ main{padding:2.5rem 3rem;max-width:760px;}
 // ══════════════════════════════════════════════════════
 // VERSION INFO
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v10.4.16';
+const APP_VERSION = 'v10.4.17';
 const BUILD_DATE = '2026-04-14';
 const CHANGELOG = [
   'v10.4.5 — Progress sparkline (Canvas 2D) in topic header, color-coded trend',
@@ -1972,7 +1973,7 @@ const Database = (() => {
 
     async update(id, data) {
       return query('exam_prompts', q =>
-        q.update({ ...data, updated_at: new Date().toISOString() }).eq('id', id),
+        q.update({ ...data, updated_at: new Date().toISOString() }).eq('id', id).select(),
         { op: 'update exam_prompt' }
       );
     },
