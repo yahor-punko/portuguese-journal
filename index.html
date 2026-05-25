@@ -5,8 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Português — Learning Journal</title>
 <!--
-  VERSION: v10.4.20 | Build: 2026-05-25
+  VERSION: v10.4.21 | Build: 2026-05-25
   CHANGELOG:
+    v10.4.21 — revert writing blocks to v10.4.19; add DEFAULT_THEME_PROMPTS for 4 grammar themes
     v10.4.20 — writing blocks: intro+routine=essay, restaurant=dialogue; grading prompt updated
     v10.4.19 — i18n: translate all Russian strings in theme exams / essay to English
     v10.4.18 — feat: theme exams (4 grammar + 3 essay) on home; fix showFinalExamTaking currentExam
@@ -1204,7 +1205,7 @@ main{padding:2.5rem 3rem;max-width:760px;}
 // ══════════════════════════════════════════════════════
 // VERSION INFO
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v10.4.20';
+const APP_VERSION = 'v10.4.21';
 const BUILD_DATE = '2026-04-14';
 const CHANGELOG = [
   'v10.4.5 — Progress sparkline (Canvas 2D) in topic header, color-coded trend',
@@ -1457,27 +1458,101 @@ const THEME_EXAMS = {
   }
 };
 
+const DEFAULT_THEME_PROMPTS = {
+  theme_verbs: `You are a European Portuguese grammar test generator for an A1/A2 student.
+
+Generate a test of 12 questions focused on these irregular verbs in European Portuguese:
+ser, estar, saber, ouvir, ir, ver, vir, ter, fazer, pôr.
+
+Cover all 10 verbs. Mix question types:
+- fill: conjugation gap — "Eu ___ (ser) estudante." → canonical_answer: "sou"
+- translate: English → Portuguese — "She goes to school." → "Ela vai à escola."
+- choice: pick correct form — "Eles ___ ao cinema. a) foram b) iam c) são d) vão" → "a"
+- transform: change person or tense — "Eu faço → Eles ___" → "fazem"
+- correct: fix the error — "Eu sabo a resposta." → "Eu sei a resposta."
+
+Focus on: present indicative (presente) and simple past (pretérito perfeito).
+Include accepted_variants for minor spelling differences.
+
+Use only European Portuguese (EP) forms — not Brazilian.`,
+
+  theme_prepositions: `You are a European Portuguese grammar test generator for an A1/A2 student.
+
+Generate a test of 12 questions focused on prepositions in European Portuguese:
+em (+ definite article: no/na/nos/nas), para, de (+ article: do/da/dos/das), a (+ article: ao/à/aos/às).
+
+Mix question types:
+- fill: "Vou ___ escola." → "à"
+- fill: "Ela mora ___ Lisboa." → "em"
+- choice: "Ele vai ___ cinema. a) ao b) para o c) do d) no" → "a"
+- translate: "I'm going to the restaurant." → "Vou ao restaurante."
+- correct: "Ela vem de o mercado." → "Ela vem do mercado."
+- transform: "em + o → ___" → "no"
+
+Cover contracted forms (no/na/nos/nas, do/da/dos/das, ao/à/aos/às, pelo/pela).
+Use only European Portuguese (EP) contexts.`,
+
+  theme_ser_estar: `You are a European Portuguese grammar test generator for an A1/A2 student.
+
+Generate a test of 12 questions focused on SER vs ESTAR in European Portuguese.
+
+Rules to test:
+- SER: permanent identity, nationality, profession, origin, material, time/date
+- ESTAR: temporary state, location (of people/things), feelings, gerund (está a fazer)
+
+Mix question types:
+- choice: "Ela ___ professora. a) é b) está c) são d) estão" → "a"
+- fill: "Hoje ___ quinta-feira." → "é"
+- fill: "O João ___ cansado." → "está"
+- translate: "I am from Portugal." → "Sou de Portugal."
+- translate: "She is tired today." → "Ela está cansada hoje."
+- correct: "Eu estou estudante." → "Eu sou estudante."
+- correct: "Lisboa é no sul de Portugal." → "Lisboa fica no sul de Portugal." (trap: location of places uses ficar)
+
+Include at least 4 questions on feelings/states (estar) and 4 on identity/profession (ser).
+Use only European Portuguese (EP) forms.`,
+
+  theme_time_reflexive: `You are a European Portuguese grammar test generator for an A1/A2 student.
+
+Generate a test of 12 questions covering two topics:
+1. Time of day (6 questions): telling time, parts of day (de manhã, à tarde, à noite, de madrugada)
+2. Reflexive verbs (6 questions): acordar-se, levantar-se, deitar-se, vestir-se, lavar-se, chamar-se
+
+Time questions:
+- fill: "São ___ (2:00)." → "duas horas"
+- translate: "It is half past three." → "São três e meia."
+- choice: "Às 14h, dizemos: a) duas da tarde b) catorze horas c) ambas são corretas d) duas de manhã" → "c"
+
+Reflexive verb questions:
+- fill: "Eu ___ às sete da manhã. (levantar)" → "levanto-me"
+- fill: "Eles ___ muito tarde. (deitar)" → "deitam-se"
+- translate: "What is your name?" → "Como te chamas?"
+- correct: "Eu lavo me os dentes." → "Eu lavo-me os dentes."
+
+Use only European Portuguese (EP) — reflexive pronoun always after the verb in affirmative sentences.`
+};
+
 const ESSAYS = {
   essay_intro: {
     title: 'Who I Am',
     icon: '👤',
-    sub: 'essay · description',
+    sub: 'description · hobbies',
     task: 'Write 5–8 sentences about yourself in Portuguese: your name, where you are from, your age, what you look like, and your hobbies.',
     hints: ['Me chamo...', 'Sou de...', 'Tenho ... anos', 'Gosto de...', 'Sou ... (adjectivo)']
   },
   essay_routine: {
     title: 'My Routine',
     icon: '📅',
-    sub: 'essay · daily life',
-    task: 'Write 5–8 sentences describing your typical day: when you wake up, what you do in the morning, afternoon, and evening. Use reflexive verbs and times of day.',
+    sub: 'daily schedule',
+    task: 'Describe your typical day (5–8 sentences): when you wake up, what you do in the morning, afternoon, and evening. Use reflexive verbs and times of day.',
     hints: ['Acordo às...', 'Levanto-me...', 'De manhã...', 'À tarde...', 'À noite...', 'Deito-me às...']
   },
   essay_restaurant: {
     title: 'At the Restaurant',
     icon: '🍽️',
-    sub: 'dialogue · ordering',
-    task: 'Write a dialogue (6–10 lines) between a customer and a waiter at a Portuguese restaurant. Cover: greeting, ordering food and drinks, asking for the bill. Write both sides.',
-    hints: ['— Boa tarde! O que deseja?', '— Queria...', '— E para beber?', '— Pode trazer...', '— A conta, se faz favor.', '— Aqui tem.']
+    sub: 'ordering · dialogue',
+    task: 'Write a dialogue or short scene at a restaurant (5–8 sentences): arriving, ordering food and drinks, and asking for the bill.',
+    hints: ['Boa tarde, queria...', 'Pode trazer...', 'Para mim...', 'A conta, por favor', 'É para aqui']
   }
 };
 
@@ -7260,7 +7335,8 @@ async function generateThemeExam(themeKey, theme) {
   }
 
   const examPrompt = examPrompts.find(p => p.unit_key === themeKey);
-  if (!examPrompt) {
+  const promptContent = examPrompt?.prompt_content || DEFAULT_THEME_PROMPTS[themeKey];
+  if (!promptContent) {
     alert(`No prompt found for test "${theme.title}".\n\nCreate one in Admin Panel → Exam Prompts.`);
     return null;
   }
@@ -7268,7 +7344,7 @@ async function generateThemeExam(themeKey, theme) {
   toast('Generating test...');
 
   try {
-    const response = await OpenAI.call(apiKey, examPrompt.prompt_content, {
+    const response = await OpenAI.call(apiKey, promptContent, {
       model: CONFIG.OPENAI.MODELS.DEFAULT,
       temperature: 0.4,
       schema: EXERCISE_SCHEMA,
