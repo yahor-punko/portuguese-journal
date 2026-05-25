@@ -5,8 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Português — Learning Journal</title>
 <!--
-  VERSION: v10.4.23 | Build: 2026-05-25
+  VERSION: v10.4.24 | Build: 2026-05-25
   CHANGELOG:
+    v10.4.24 — fix: essay grader — ignore punctuation in score and grammar_issues
     v10.4.23 — fix: theme_verbs prompt — present tense only (A1), remove past tense examples
     v10.4.22 — fix: essay grading prompt — force all feedback fields in English
     v10.4.21 — revert writing blocks to v10.4.19; add DEFAULT_THEME_PROMPTS for 4 grammar themes
@@ -1207,7 +1208,7 @@ main{padding:2.5rem 3rem;max-width:760px;}
 // ══════════════════════════════════════════════════════
 // VERSION INFO
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v10.4.23';
+const APP_VERSION = 'v10.4.24';
 const BUILD_DATE = '2026-04-14';
 const CHANGELOG = [
   'v10.4.5 — Progress sparkline (Canvas 2D) in topic header, color-coded trend',
@@ -7444,7 +7445,9 @@ ${text}
 
 The student is at A1/A2 level learning European Portuguese. Evaluate grammar, vocabulary, coherence, and (if it is a dialogue) naturalness of the exchanges. Provide specific corrections and encouraging feedback.
 
-IMPORTANT: Write ALL feedback fields (overall_feedback, vocabulary_feedback, coherence_feedback, grammar issue explanations) in English only.
+IMPORTANT:
+- Write ALL feedback fields (overall_feedback, vocabulary_feedback, coherence_feedback, grammar issue explanations) in English only.
+- Do NOT penalise punctuation. Ignore missing/wrong commas, periods, accents on punctuation marks, or capitalisation errors. Score and grammar_issues must reflect grammar and vocabulary only.
 
 Return JSON matching the required schema.`;
 
