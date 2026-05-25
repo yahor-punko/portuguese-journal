@@ -5,8 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Português — Learning Journal</title>
 <!--
-  VERSION: v10.4.24 | Build: 2026-05-25
+  VERSION: v10.4.25 | Build: 2026-05-25
   CHANGELOG:
+    v10.4.25 — feat: brand-name click → showHome()
     v10.4.24 — fix: essay grader — ignore punctuation in score and grammar_issues
     v10.4.23 — fix: theme_verbs prompt — present tense only (A1), remove past tense examples
     v10.4.22 — fix: essay grading prompt — force all feedback fields in English
@@ -621,7 +622,7 @@ main{padding:2.5rem 3rem;max-width:760px;}
 <aside id="sidebar">
   <div class="aside-head">
     <div class="brand-sub">European Portuguese</div>
-    <div class="brand-name">Português<br>Learning Journal</div>
+    <div class="brand-name" onclick="showHome()" style="cursor:pointer;">Português<br>Learning Journal</div>
     <div class="user-pill">
       <span id="user-email-label"></span>
       <button class="logout-btn" onclick="doLogout()">sign out</button>
@@ -1208,7 +1209,7 @@ main{padding:2.5rem 3rem;max-width:760px;}
 // ══════════════════════════════════════════════════════
 // VERSION INFO
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v10.4.24';
+const APP_VERSION = 'v10.4.25';
 const BUILD_DATE = '2026-04-14';
 const CHANGELOG = [
   'v10.4.5 — Progress sparkline (Canvas 2D) in topic header, color-coded trend',
